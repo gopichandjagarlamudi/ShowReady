@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@showready/types": ["../../packages/types/src/index.ts"],
+      "@showready/scoring": ["../../packages/scoring/src/index.ts"],
+      "@showready/db": ["../../packages/db/src/index.ts"]
+    },
+    "plugins": [{ "name": "next" }],
+    "allowJs": false,
+    "incremental": true,
+    "types": ["node", "react", "react-dom"]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

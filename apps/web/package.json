@@ -1,0 +1,36 @@
+{
+  "name": "@showready/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "eslint . --max-warnings=0",
+    "seed:supabase": "tsx ./scripts/seed-supabase.ts",
+    "start": "next start",
+    "test": "vitest run --config vitest.config.ts --passWithNoTests",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@showready/db": "workspace:*",
+    "@showready/scoring": "workspace:*",
+    "@showready/types": "workspace:*",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.84.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.24",
+    "lucide-react": "^0.554.0",
+    "next": "^16.0.1",
+    "posthog-js": "^1.286.0",
+    "posthog-node": "^5.13.2",
+    "radix-ui": "^1.4.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "resend": "^6.4.0",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.12"
+  }
+}

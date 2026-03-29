@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@showready/scoring": ["../scoring/dist/index.d.ts"],
+      "@showready/types": ["../types/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
