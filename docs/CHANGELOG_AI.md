@@ -1,6 +1,7 @@
 # AI Changelog
 
 ## 2026-04-07
+- Connected the existing Vercel `showready` project to `gopichandjagarlamudi/ShowReady` through Vercel Git integration with `master` as the production branch, so future pushes from GitHub can trigger automatic deployments without a manual `vercel deploy`.
 - Fixed the Vercel monorepo deploy path for the existing `showready` project by setting its root directory to `apps/web`, enabling source files outside the root, adding a repo `.vercelignore`, and linking the checkout to the real project instead of the accidental `web` project.
 - Updated `apps/web/next.config.ts` to set both `turbopack.root` and `outputFileTracingRoot` to the repo root, added the missing `@showready/scoring` workspace dependency to `packages/db/package.json`, refreshed `pnpm-lock.yaml`, and verified the fix with `corepack pnpm --filter @showready/db build`, `corepack pnpm --filter @showready/web typecheck`, and `corepack pnpm --filter @showready/web build`.
 - Deployed a fresh Vercel preview for the current commit to `https://showready-1u87krowa-jagarlamudigopichand99-4818s-projects.vercel.app` after the remote build passed on the corrected monorepo configuration.

@@ -4,6 +4,7 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Connected the existing Vercel `showready` project directly to the GitHub repository `gopichandjagarlamudi/ShowReady`, with `master` configured as the production branch so future Git pushes can trigger Vercel deployments without the manual CLI deploy path.
 - Fixed the Vercel monorepo deployment path for the existing `showready` project by updating the remote project root to `apps/web`, enabling source files outside the root directory, adding a repo `.vercelignore`, and linking the local checkout to that project instead of relying on a temporary standalone bundle.
 - Added explicit monorepo root config in `apps/web/next.config.ts` (`turbopack.root` and `outputFileTracingRoot`) so local and Vercel Next.js 16/Turbopack builds resolve workspace packages from the repo root consistently.
 - Declared the missing `@showready/scoring` workspace dependency in `packages/db/package.json`, refreshed `pnpm-lock.yaml`, and verified the previously failing remote build path now succeeds.
@@ -73,7 +74,6 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 
 ## Open Issues / Loose Ends
 - Browser verification of the agent-authenticated dashboard-to-create-lead flow is still blocked by the current local `/auth/login` redirect bounce back to `/login`; the new intake browser smoke verifies seeded public sale/rental links directly instead.
-- The Vercel project was created from a local deploy, not a GitHub import, so automatic Git-based redeploys are not configured yet.
 - Preview deployments protected by Vercel Authentication still return `HTTP 500` on browser `POST /auth/register` before runtime code executes, even after the app-side share-token preservation fix; this appears to be a platform protection constraint rather than an app runtime exception.
 - Google OAuth reaches the live Google sign-in screen with the correct production callback, but a full callback completion still requires entering a real Google account in the browser.
 - Email/password signup now works on production while Supabase email confirmation remains disabled; if confirmations are re-enabled, the previous email-send rate-limit constraint is expected to return unless Auth email delivery is reconfigured.
@@ -85,6 +85,7 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 ## Risks / Fragile Areas
 - The entire tree is still uncommitted.
 - The active Vercel project now builds from `apps/web` with source files outside the root enabled; future deployment changes should preserve that monorepo setting or Vercel will regress to failing Next.js/Turbopack root resolution.
+- Automatic Vercel deploys now depend on the Vercel GitHub app retaining access to `gopichandjagarlamudi/ShowReady`; removing that repo access will silently break push-triggered deployments.
 - If the SQL migration drifts from the checked-in file, the app can diverge from the hand-written `Database` type and runtime assumptions.
 - The demo seed and admin-backed flows depend on `SUPABASE_SERVICE_ROLE_KEY`; rotating or removing it locally will break those paths.
 - RLS and auth trigger behavior are now part of the product contract; changes there can silently break onboarding or lead access.
