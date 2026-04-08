@@ -1,6 +1,8 @@
 # AI Changelog
 
 ## 2026-04-08
+- Fixed the failed Vercel production deployment by removing the stale `packages/db/src/mock-store.ts` export from `@showready/db`; Vercel was running `turbo run build`, which still compiled that dead legacy file and failed on removed `@showready/types` exports before `@showready/web` could finish.
+- Verified the build fix with `corepack pnpm --filter @showready/db build`, `corepack pnpm typecheck`, and `corepack pnpm --filter @showready/web build`, matching the Vercel failure path that had been reported by `vercel inspect --logs`.
 - Fixed the lead detail stage-action list by adding `apps/web/lib/lead-stage.ts`, updating `apps/web/app/leads/[leadId]/page.tsx` to derive move targets from the current `pipelineStage`, excluding the current stage from the rendered buttons, keeping `new` out of the manual destination list, and allowing `closed` leads to reopen into active stages.
 - Added `apps/web/lib/lead-stage.test.ts` to lock the manual move-target rules, then verified the change with `corepack pnpm --filter @showready/web test -- lib/lead-stage.test.ts` and `corepack pnpm --filter @showready/web typecheck`; a local browser pass on the authenticated lead-detail page is still blocked by the existing `/auth/login` redirect bounce.
 - Reworked `apps/web/components/leads-manager.tsx` from a flat lead-card grid into a stage-grouped pipeline view that renders the existing `ready`, `nurture`, `hold`, `new`, and `closed` categories as stacked sections with counts, stage-specific visual treatment, empty states, and the user-facing `Ready to show` label.

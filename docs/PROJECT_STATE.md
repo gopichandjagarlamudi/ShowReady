@@ -4,6 +4,8 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Fixed the Vercel production build break caused by the legacy `packages/db/src/mock-store.ts` file: `@showready/db` no longer exports or compiles that dead mock runtime path, so `turbo run build` no longer fails on removed `@showready/types` exports during the Vercel build bootstrap.
+- Reproduced the remote failure from the Vercel CLI logs, then re-verified the repaired build path locally with `corepack pnpm --filter @showready/db build`, `corepack pnpm typecheck`, and `corepack pnpm --filter @showready/web build`.
 - Fixed the lead detail stage controls so the page now derives manual move targets from a shared helper, excludes the lead's current stage from the action list, keeps `new` out of the manual destination set, and allows `closed` leads to reopen back into `ready`, `nurture`, or `hold`.
 - Added `apps/web/lib/lead-stage.ts` plus focused coverage in `apps/web/lib/lead-stage.test.ts`, then verified the transition rules with `corepack pnpm --filter @showready/web test -- lib/lead-stage.test.ts` and `corepack pnpm --filter @showready/web typecheck`.
 - Reworked the `/leads` page into a stage-grouped pipeline surface: the existing `ready`, `nurture`, `hold`, `new`, and `closed` stages now render as stacked sections with counts, descriptive sublabels, empty states, and stage-aware visual treatment instead of one undifferentiated card grid.
