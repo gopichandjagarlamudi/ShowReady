@@ -2,10 +2,11 @@ import { createClient } from "@supabase/supabase-js"
 import { scoreLead } from "@showready/scoring"
 import {
   getDefaultTemplateForIntakeType,
-  type IntakeAnswers,
+  type IntakeSubmission,
   type IntakeType
 } from "@showready/types"
 import type { Database } from "../lib/supabase/database"
+import { flattenDraftAnswers } from "../lib/intake-draft"
 
 const DEMO_EMAIL = "demo@showready.local"
 const DEMO_PASSWORD = "demo12345"
@@ -19,7 +20,7 @@ const sampleLeadSpecs: Array<{
   buyerEmail: string
   buyerPhone?: string
   intakeType: IntakeType
-  answers: IntakeAnswers
+  submission: IntakeSubmission
 }> = [
   {
     id: "e357e934-6f9a-4d75-bf12-8db0cd1bf701",
@@ -29,15 +30,26 @@ const sampleLeadSpecs: Array<{
     buyerEmail: "sofia.chen@example.com",
     buyerPhone: "+1 416 555 0101",
     intakeType: "sale",
-    answers: {
-      timeline: "asap",
-      financing: "cash",
-      budgetBand: "1m_plus",
-      exclusiveAgent: "no",
-      moveReasons: ["relocation"],
-      priorShowings: "many",
-      offerReadiness: 5,
-      notes: "Flying in next week and ready to shortlist properties immediately."
+    submission: {
+      contact: {
+        fullName: "Sofia Chen",
+        email: "sofia.chen@example.com",
+        phone: "+1 416 555 0101"
+      },
+      intent: "buy",
+      buyer: {
+        buyingFor: "myself",
+        timeline: "asap",
+        budgetKnowledge: "know_it",
+        mortgageStatus: "cash",
+        neighborhoods: "Leaside, Lawrence Park",
+        propertyType: "detached",
+        bedrooms: "4",
+        bathrooms: "3",
+        mustHaves: ["backyard", "parking"],
+        workedWithAnotherRealtor: "no",
+        additionalContext: "Flying in next week and ready to shortlist properties immediately."
+      }
     }
   },
   {
@@ -48,15 +60,27 @@ const sampleLeadSpecs: Array<{
     buyerEmail: "marcus.hall@example.com",
     buyerPhone: "+1 647 555 0199",
     intakeType: "rental",
-    answers: {
-      timeline: "3_6mo",
-      financing: "in_progress",
-      budgetBand: "400k_600k",
-      exclusiveAgent: "yes_not_exclusive",
-      moveReasons: ["upsizing"],
-      priorShowings: "few",
-      offerReadiness: 3,
-      notes: "Needs a larger place before the next school year starts."
+    submission: {
+      contact: {
+        fullName: "Marcus Hall",
+        email: "marcus.hall@example.com",
+        phone: "+1 647 555 0199"
+      },
+      intent: "rent",
+      rental: {
+        moveTimeline: "within_1_month",
+        rentRange: "$2,000–$2,500/mo",
+        neighborhoods: "North York",
+        placeType: "apartment",
+        bedrooms: "2",
+        hasPets: "no",
+        occupantCount: "3",
+        incomeProof: "yes",
+        preferredMoveInDate: "2026-05-01",
+        mustHaves: ["laundry", "near_transit"],
+        rentedInCanadaBefore: "yes",
+        additionalContext: "Needs a larger place before the next school year starts."
+      }
     }
   },
   {
@@ -66,15 +90,22 @@ const sampleLeadSpecs: Array<{
     buyerName: "Nina Patel",
     buyerEmail: "nina.patel@example.com",
     intakeType: "sale",
-    answers: {
-      timeline: "exploring",
-      financing: "no",
-      budgetBand: "under_200k",
-      exclusiveAgent: "yes_exclusive",
-      moveReasons: ["lifestyle"],
-      priorShowings: "none",
-      offerReadiness: 1,
-      notes: "Still comparing neighborhoods and not ready for showings yet."
+    submission: {
+      contact: {
+        fullName: "Nina Patel",
+        email: "nina.patel@example.com"
+      },
+      intent: "buy",
+      buyer: {
+        buyingFor: "not_sure",
+        timeline: "exploring",
+        budgetKnowledge: "not_yet",
+        mortgageStatus: "not_yet",
+        neighborhoods: "Still deciding",
+        propertyType: "condo",
+        workedWithAnotherRealtor: "yes",
+        additionalContext: "Still comparing neighborhoods and not ready for showings yet."
+      }
     }
   }
 ]
@@ -250,8 +281,16 @@ async function seedLeadData(
   client: ReturnType<typeof createClient<Database>>,
   agentId: string
 ) {
+  await client
+    .from("leads")
+    .delete()
+    .in("token", [
+      "37d16df0-9200-46be-9f51-cf9213d61b23",
+      "d4487e1f-498c-4f2c-99fd-3b63e723f364"
+    ])
+
   for (const spec of sampleLeadSpecs) {
-    const scored = scoreLead(spec.answers, 8)
+    const scored = scoreLead(spec.submission, 8)
     const now = new Date().toISOString()
 
     const { error: leadError } = await client.from("leads").upsert(
@@ -282,11 +321,19 @@ async function seedLeadData(
       throw leadError
     }
 
-    const answerRows = Object.entries(spec.answers).map(([questionKey, answerValue]) => ({
+    const answerRows = Object.entries(
+      flattenDraftAnswers({
+        contact: spec.submission.contact,
+        intent: spec.submission.intent,
+        buyer: spec.submission.intent === "buy" ? spec.submission.buyer : undefined,
+        rental: spec.submission.intent === "rent" ? spec.submission.rental : undefined,
+        customAnswers: spec.submission.customAnswers ?? {}
+      })
+    ).map(([questionKey, answerValue]) => ({
       lead_id: spec.id,
       question_key: questionKey,
-      answer_value: answerValue,
-      scored: true,
+      answer_value: answerValue as Database["public"]["Tables"]["lead_answers"]["Insert"]["answer_value"],
+      scored: questionKey.startsWith("buyer.") || questionKey.startsWith("rental."),
       updated_at: now
     }))
 
@@ -316,7 +363,73 @@ async function seedLeadData(
     if (scoreError) {
       throw scoreError
     }
+
+    const { error: inviteError } = await client.from("invites").upsert(
+      {
+        id: spec.id,
+        agent_id: agentId,
+        token: spec.token,
+        status: "converted",
+        token_expires_at: "2099-01-01T00:00:00.000Z",
+        draft_payload: {
+          contact: spec.submission.contact,
+          intent: spec.submission.intent,
+          buyer: spec.submission.intent === "buy" ? spec.submission.buyer : undefined,
+          rental: spec.submission.intent === "rent" ? spec.submission.rental : undefined,
+          customAnswers: spec.submission.customAnswers ?? {}
+        },
+        lead_id: spec.id,
+        opened_at: now,
+        converted_at: now,
+        updated_at: now
+      },
+      {
+        onConflict: "id"
+      }
+    )
+
+    if (inviteError) {
+      throw inviteError
+    }
   }
+
+  await client.from("invites").upsert(
+    [
+      {
+        id: "7f0f52ca-6c8f-40fd-9f49-7a7a6ce19193",
+        agent_id: agentId,
+        token: "37d16df0-9200-46be-9f51-cf9213d61b23",
+        status: "generated",
+        token_expires_at: "2099-01-01T00:00:00.000Z",
+        lead_id: null,
+        opened_at: null,
+        converted_at: null,
+        draft_payload: {
+          contact: {
+            fullName: ""
+          }
+        }
+      },
+      {
+        id: "db153f0a-ddda-4d93-a2c7-c0a7fd0e4b45",
+        agent_id: agentId,
+        token: "d4487e1f-498c-4f2c-99fd-3b63e723f364",
+        status: "generated",
+        token_expires_at: "2099-01-01T00:00:00.000Z",
+        lead_id: null,
+        opened_at: null,
+        converted_at: null,
+        draft_payload: {
+          contact: {
+            fullName: ""
+          }
+        }
+      }
+    ],
+    {
+      onConflict: "id"
+    }
+  )
 }
 
 async function main() {

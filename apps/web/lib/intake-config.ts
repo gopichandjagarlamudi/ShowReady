@@ -1,6 +1,9 @@
 import {
   getCoreQuestionsForIntakeType as getSharedCoreQuestionsForIntakeType,
   getDefaultTemplateForIntakeType as getSharedDefaultTemplateForIntakeType,
+  getOptionalQuestionsForIntent as getSharedOptionalQuestionsForIntent,
+  getRequiredQuestionsForIntent as getSharedRequiredQuestionsForIntent,
+  intakeTypeToIntent,
   type IntakeType,
   type QuestionDefinition,
   type QuestionTemplate
@@ -22,10 +25,18 @@ export function getDefaultTemplateForIntakeType(
   return getSharedDefaultTemplateForIntakeType(intakeType)
 }
 
+export function getRequiredQuestionsForIntent(intakeType: "sale" | "rental") {
+  return getSharedRequiredQuestionsForIntent(intakeTypeToIntent(intakeType))
+}
+
+export function getOptionalQuestionsForIntent(intakeType: "sale" | "rental") {
+  return getSharedOptionalQuestionsForIntent(intakeTypeToIntent(intakeType))
+}
+
 export function resolveTemplateForIntakeType(
   intakeType: IntakeType,
   templates: TemplateLike[]
-): TemplateLike {
+): QuestionTemplate {
   const template = templates.find((entry) => {
     if (entry.intakeType) {
       return entry.intakeType === intakeType
@@ -38,7 +49,10 @@ export function resolveTemplateForIntakeType(
     throw new Error(`Question template not found for intake type ${intakeType}.`)
   }
 
-  return template
+  return {
+    ...template,
+    intakeType: template.intakeType ?? "sale"
+  }
 }
 
 export function formatIntakeTypeLabel(intakeType: IntakeType): string {

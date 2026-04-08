@@ -2,7 +2,8 @@
 
 import {
   completeOnboarding,
-  createLead,
+  createInvite,
+  deleteLeads,
   ensureAgentScaffold,
   overrideLeadScore,
   updateLeadStage
@@ -171,7 +172,7 @@ export async function saveSettingsAction(formData: FormData) {
   redirect("/dashboard?welcome=1")
 }
 
-export async function createLeadAction(formData: FormData) {
+export async function createInviteAction() {
   const agentId = await getCurrentAgentId()
   if (!agentId) {
     redirect("/login")
@@ -180,28 +181,20 @@ export async function createLeadAction(formData: FormData) {
   const supabase = await createSupabaseServerClient()
 
   try {
-    const lead = await createLead(supabase, agentId, {
-      intakeType: (getString(formData, "intakeType") as "sale" | "rental") || "sale",
-      buyerName: getString(formData, "buyerName"),
-      buyerPhone: getString(formData, "buyerPhone"),
-      buyerEmail: getString(formData, "buyerEmail")
-    })
+    const invite = await createInvite(supabase, agentId)
 
     await trackServerEvent(
-      "lead.created",
-      {
-        hasEmail: Boolean(lead.buyerEmail),
-        hasPhone: Boolean(lead.buyerPhone)
-      },
+      "invite.created",
+      {},
       agentId
     )
 
     revalidatePath("/dashboard")
     revalidatePath("/leads")
-    redirect(`/leads/${lead.id}?created=1`)
+    redirect(`/dashboard?invite=${invite.token}`)
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to create the lead."
+      error instanceof Error ? error.message : "Unable to create the invite."
     redirect(`/dashboard?error=${encodeURIComponent(message)}`)
   }
 }
@@ -256,6 +249,36 @@ export async function overrideLeadScoreAction(formData: FormData) {
   await trackServerEvent("lead.score_overridden", { overrideScoreValue }, agentId)
 
   revalidatePath(`/leads/${leadId}`)
+  revalidatePath("/dashboard")
+  revalidatePath("/leads")
+}
+
+export async function deleteLeadsAction(formData: FormData) {
+  const agentId = await getCurrentAgentId()
+  if (!agentId) {
+    redirect("/login")
+  }
+
+  const leadIds = formData
+    .getAll("leadId")
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+
+  if (leadIds.length === 0) {
+    return
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const deletedCount = await deleteLeads(supabase, agentId, leadIds)
+
+  await trackServerEvent(
+    "lead.deleted",
+    {
+      deletedCount
+    },
+    agentId
+  )
+
   revalidatePath("/dashboard")
   revalidatePath("/leads")
 }

@@ -7,11 +7,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { buildAppUrl, formatDate } from "@/lib/utils";
+import { flattenDraftAnswers } from "@/lib/intake-draft";
+import { getLeadDetailMoveTargets } from "@/lib/lead-stage";
 import { getCurrentAgentContext } from "@/lib/session";
 import { overrideLeadScoreAction, updateLeadStageAction } from "@/lib/actions";
 import { getLeadById } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatIntakeTypeLabel } from "@/lib/intake-config";
+import { getQuestionLabel } from "@showready/types";
 
 export default async function LeadDetailPage({
   params
@@ -30,6 +33,8 @@ export default async function LeadDetailPage({
   if (!lead) {
     notFound();
   }
+  const flattenedAnswers = lead.answers ? flattenDraftAnswers(lead.answers) : {}
+  const moveTargets = getLeadDetailMoveTargets(lead.pipelineStage)
 
   return (
     <AppShell currentPath="/leads" eyebrow="Lead detail" heading={lead.buyerName}>
@@ -67,7 +72,7 @@ export default async function LeadDetailPage({
           </div>
           <form action={updateLeadStageAction} className="mt-6 grid gap-3">
             <input type="hidden" name="leadId" value={lead.id} />
-            {["ready", "nurture", "hold", "closed"].map((stage) => (
+            {moveTargets.map((stage) => (
               <Button key={stage} type="submit" variant="secondary" name="pipelineStage" value={stage}>
                 Move to {stage}
               </Button>
@@ -120,22 +125,12 @@ export default async function LeadDetailPage({
             </div>
           </Card>
           <Card className="p-6">
-            <p className="font-display text-3xl text-[color:var(--ink)]">Buyer answers</p>
+            <p className="font-display text-3xl text-[color:var(--ink)]">Intake answers</p>
             <div className="mt-5 grid gap-4">
-              {Object.entries(lead.answers ?? {}).map(([key, value]) => (
+              {Object.entries(flattenedAnswers).map(([key, value]) => (
                 <div key={key} className="rounded-[24px] bg-[color:var(--surface-strong)] p-4">
                   <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-ink)]">
-                    {key}
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-[color:var(--ink)]">
-                    {Array.isArray(value) ? value.join(", ") : String(value)}
-                  </p>
-                </div>
-              ))}
-              {Object.entries(lead.customAnswers ?? {}).map(([key, value]) => (
-                <div key={key} className="rounded-[24px] bg-[color:var(--surface-strong)] p-4">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-ink)]">
-                    {key}
+                    {getQuestionLabel(key)}
                   </p>
                   <p className="mt-2 text-sm leading-7 text-[color:var(--ink)]">
                     {Array.isArray(value) ? value.join(", ") : String(value)}

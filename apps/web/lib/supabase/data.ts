@@ -2,13 +2,18 @@ import "server-only"
 
 import { randomUUID } from "node:crypto"
 import {
-  CORE_QUESTION_ORDER,
+  canCreateLeadFromDraft,
   getDefaultTemplateForIntakeType,
+  getQuestionLabel,
+  intakeTypeToIntent,
+  intentToIntakeType,
   type AgentProfile,
   type AgentSettings,
   type CustomQuestion,
-  type IntakeAnswers,
+  type IntakeDraft,
+  type IntakeSubmission,
   type IntakeType,
+  type Invite,
   type Lead,
   type LeadStage,
   type QuestionTemplate,
@@ -24,7 +29,14 @@ import {
   assertRequiredAnswerValue
 } from "@/lib/intake-guards"
 import {
+  assertDraftSubmissionComplete,
+  buildLeadInputFromDraft,
+  flattenDraftAnswers
+} from "@/lib/intake-draft"
+import {
   getCoreQuestionsForIntakeType,
+  getOptionalQuestionsForIntent,
+  getRequiredQuestionsForIntent,
   resolveTemplateForIntakeType
 } from "@/lib/intake-config"
 
@@ -52,17 +64,12 @@ type CreateLeadInput = {
   buyerEmail?: string
 }
 
-type SubmitLeadInput = {
-  answers: IntakeAnswers
-  customAnswers?: Record<string, string | string[]>
+type SubmitInviteInput = {
+  draft: IntakeDraft
 }
 
 function nowIso() {
   return new Date().toISOString()
-}
-
-function isCoreQuestionKey(key: string) {
-  return CORE_QUESTION_ORDER.includes(key as (typeof CORE_QUESTION_ORDER)[number])
 }
 
 function requireData<T>(value: T | null, message: string): T {
@@ -139,26 +146,62 @@ function parseBreakdown(value: Json | null): ScoreBreakdown | undefined {
   return value as unknown as ScoreBreakdown
 }
 
+function parseDraft(value: Json | null): IntakeDraft | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined
+  }
+
+  return value as unknown as IntakeDraft
+}
+
 function buildAnswerMaps(
-  rows: Database["public"]["Tables"]["lead_answers"]["Row"][]
+  rows: Database["public"]["Tables"]["lead_answers"]["Row"][],
+  row?: Database["public"]["Tables"]["leads"]["Row"]
 ): {
-  answers: Partial<IntakeAnswers>
+  answers: IntakeDraft
   customAnswers: Record<string, string | string[]>
 } {
-  const answers: Partial<IntakeAnswers> = {}
-  const customAnswers: Record<string, string | string[]> = {}
+  const answers: IntakeDraft = {
+    contact: {
+      fullName: row?.buyer_name ?? "",
+      phone: row?.buyer_phone ?? undefined,
+      email: row?.buyer_email ?? undefined
+    },
+    intent: row ? intakeTypeToIntent(normalizeIntakeType(row.intake_type)) : undefined,
+    buyer: {},
+    rental: {},
+    customAnswers: {}
+  }
+  const customAnswers: Record<string, string | string[]> = answers.customAnswers ?? {}
 
   for (const row of rows) {
-    if (isCoreQuestionKey(row.question_key)) {
-      ;(answers as Record<string, Json>)[row.question_key] = row.answer_value
+    if (row.question_key.startsWith("contact.")) {
+      const key = row.question_key.replace("contact.", "")
+      ;(answers.contact as Record<string, Json>)[key] = row.answer_value
       continue
     }
 
-    customAnswers[row.question_key] = row.answer_value as string | string[]
-  }
+    if (row.question_key === "intent") {
+      answers.intent = row.answer_value as "buy" | "rent"
+      continue
+    }
 
-  if (typeof answers.notes !== "string") {
-    answers.notes = ""
+    if (row.question_key.startsWith("buyer.")) {
+      const key = row.question_key.replace("buyer.", "")
+      ;(answers.buyer as Record<string, Json>)[key] = row.answer_value
+      continue
+    }
+
+    if (row.question_key.startsWith("rental.")) {
+      const key = row.question_key.replace("rental.", "")
+      ;(answers.rental as Record<string, Json>)[key] = row.answer_value
+      continue
+    }
+
+    if (row.question_key.startsWith("custom.")) {
+      customAnswers[row.question_key.replace("custom.", "")] =
+        row.answer_value as string | string[]
+    }
   }
 
   return {
@@ -214,7 +257,7 @@ function mapLead(
   answerRows: Database["public"]["Tables"]["lead_answers"]["Row"][] = [],
   scoreRow?: Database["public"]["Tables"]["lead_scores"]["Row"]
 ): Lead {
-  const { answers, customAnswers } = buildAnswerMaps(answerRows)
+  const { answers, customAnswers } = buildAnswerMaps(answerRows, row)
   const scoreOverride =
     scoreRow?.overridden && scoreRow.override_meta
       ? (scoreRow.override_meta as unknown as ScoreOverride)
@@ -244,28 +287,25 @@ function mapLead(
   }
 }
 
-function assertCompleteAnswers(
-  answers: Partial<IntakeAnswers>,
-  intakeType: IntakeType
-): asserts answers is IntakeAnswers {
-  const missing = getCoreQuestionsForIntakeType(intakeType).filter((question) => {
-    if (question.key === "notes") {
-      return false
+function mapInvite(
+  row: Database["public"]["Tables"]["invites"]["Row"]
+): Invite {
+  return {
+    id: row.id,
+    agentId: row.agent_id,
+    token: row.token,
+    status: row.status,
+    tokenExpiresAt: row.token_expires_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    openedAt: row.opened_at ?? undefined,
+    convertedAt: row.converted_at ?? undefined,
+    leadId: row.lead_id ?? undefined,
+    draft: parseDraft(row.draft_payload) ?? {
+      contact: {
+        fullName: ""
+      }
     }
-
-    try {
-      assertRequiredAnswerValue(
-        question.label,
-        answers[question.key as keyof IntakeAnswers]
-      )
-      return false
-    } catch {
-      return true
-    }
-  }).map((question) => question.label)
-
-  if (missing.length > 0) {
-    throw new Error(`Missing answers for: ${missing.join(", ")}`)
   }
 }
 
@@ -409,6 +449,53 @@ export async function listLeads(
   }
 
   return (data ?? []).map((row) => mapLead(row))
+}
+
+export async function listInvites(
+  client: AppSupabaseClient,
+  agentId: string
+) {
+  const { data, error } = await client
+    .from("invites")
+    .select("*")
+    .eq("agent_id", agentId)
+    .order("updated_at", { ascending: false })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []).map((row) => mapInvite(row))
+}
+
+export async function createInvite(
+  client: AppSupabaseClient,
+  agentId: string
+) {
+  const { data, error } = await client
+    .from("invites")
+    .insert({
+      agent_id: agentId,
+      token: randomUUID(),
+      status: "generated",
+      token_expires_at: new Date(
+        Date.now() + 1000 * 60 * 60 * 24 * 7
+      ).toISOString(),
+      draft_payload: {
+        contact: {
+          fullName: ""
+        }
+      } as unknown as Json,
+      updated_at: nowIso()
+    })
+    .select("*")
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return mapInvite(data)
 }
 
 export async function getLeadById(
@@ -732,6 +819,41 @@ export async function overrideLeadScore(
   )
 }
 
+export async function deleteLeads(
+  client: AppSupabaseClient,
+  agentId: string,
+  leadIds: string[]
+) {
+  const uniqueLeadIds = Array.from(new Set(leadIds.filter(Boolean)))
+
+  if (uniqueLeadIds.length === 0) {
+    return 0
+  }
+
+  const { error: inviteDeleteError } = await client
+    .from("invites")
+    .delete()
+    .eq("agent_id", agentId)
+    .in("lead_id", uniqueLeadIds)
+
+  if (inviteDeleteError) {
+    throw inviteDeleteError
+  }
+
+  const { data, error } = await client
+    .from("leads")
+    .delete()
+    .eq("agent_id", agentId)
+    .in("id", uniqueLeadIds)
+    .select("id")
+
+  if (error) {
+    throw error
+  }
+
+  return data?.length ?? 0
+}
+
 export async function getAnalyticsSummary(
   client: AppSupabaseClient,
   agentId: string
@@ -767,17 +889,17 @@ export async function getLeadIntakeContext(
   client: AppSupabaseClient,
   token: string
 ) {
-  const { data: lead, error: leadError } = await client
-    .from("leads")
+  const { data: invite, error: inviteError } = await client
+    .from("invites")
     .select("*")
     .eq("token", token)
     .maybeSingle()
 
-  if (leadError) {
-    throw leadError
+  if (inviteError) {
+    throw inviteError
   }
 
-  if (!lead) {
+  if (!invite) {
     return null
   }
 
@@ -785,17 +907,15 @@ export async function getLeadIntakeContext(
     { data: agent, error: agentError },
     { data: settings, error: settingsError },
     { data: templates, error: templateError },
-    { data: answerRows, error: answerError }
+    leadContext
   ] =
     await Promise.all([
-      client.from("agents").select("*").eq("id", lead.agent_id).single(),
-      client.from("agent_settings").select("*").eq("agent_id", lead.agent_id).single(),
-      client.from("question_templates").select("*").eq("agent_id", lead.agent_id),
-      client
-        .from("lead_answers")
-        .select("*")
-        .eq("lead_id", lead.id)
-        .order("updated_at", { ascending: true })
+      client.from("agents").select("*").eq("id", invite.agent_id).single(),
+      client.from("agent_settings").select("*").eq("agent_id", invite.agent_id).single(),
+      client.from("question_templates").select("*").eq("agent_id", invite.agent_id),
+      invite.lead_id
+        ? client.from("leads").select("*").eq("id", invite.lead_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null })
     ])
 
   if (agentError) {
@@ -810,144 +930,258 @@ export async function getLeadIntakeContext(
     throw templateError
   }
 
-  if (answerError) {
-    throw answerError
+  if (leadContext.error) {
+    throw leadContext.error
   }
 
-  const latestScore = await client
-    .from("lead_scores")
-    .select("*")
-    .eq("lead_id", lead.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
+  let lead: Lead | undefined
 
-  if (latestScore.error) {
-    throw latestScore.error
+  if (invite.lead_id && leadContext.data) {
+    const [{ data: answerRows, error: answerError }, latestScore] = await Promise.all([
+      client
+        .from("lead_answers")
+        .select("*")
+        .eq("lead_id", invite.lead_id)
+        .order("updated_at", { ascending: true }),
+      client
+        .from("lead_scores")
+        .select("*")
+        .eq("lead_id", invite.lead_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+    ])
+
+    if (answerError) {
+      throw answerError
+    }
+
+    if (latestScore.error) {
+      throw latestScore.error
+    }
+
+    lead = mapLead(leadContext.data, answerRows ?? [], latestScore.data?.[0])
   }
+
+  const mappedTemplates = (templates ?? []).map((entry) => mapQuestionTemplate(entry))
+  const parsedDraft = parseDraft(invite.draft_payload) ?? {
+    contact: {
+      fullName: ""
+    }
+  }
+  const draftIntent = parsedDraft.intent ?? (lead ? intakeTypeToIntent(lead.intakeType) : undefined)
 
   return {
-    lead: mapLead(lead, answerRows ?? [], latestScore.data?.[0]),
+    invite: mapInvite(invite),
+    lead,
+    draft: parsedDraft,
     agent: mapAgentProfile(agent),
     settings: mapAgentSettings(settings),
-    template: resolveTemplateForIntakeType(
-      normalizeIntakeType(lead.intake_type),
-      (templates ?? []).map((entry) => mapQuestionTemplate(entry))
-    ),
-    isExpired: new Date(lead.token_expires_at).getTime() < Date.now(),
-    questions: getCoreQuestionsForIntakeType(normalizeIntakeType(lead.intake_type))
+    templates: {
+      sale: resolveTemplateForIntakeType("sale", mappedTemplates),
+      rental: resolveTemplateForIntakeType("rental", mappedTemplates)
+    },
+    isExpired: new Date(invite.token_expires_at).getTime() < Date.now(),
+    questions: draftIntent
+      ? {
+          required: getRequiredQuestionsForIntent(intentToIntakeType(draftIntent)),
+          optional: getOptionalQuestionsForIntent(intentToIntakeType(draftIntent))
+        }
+      : {
+          required: [],
+          optional: []
+        }
   }
 }
 
-export async function autosaveLeadAnswer(
+async function upsertLeadAnswersFromDraft(
   client: AppSupabaseClient,
-  token: string,
-  questionKey: string,
-  value: string | string[] | number
+  leadId: string,
+  draft: IntakeDraft
 ) {
+  const flattened = flattenDraftAnswers(draft)
+  const answerUpserts = Object.entries(flattened).map(([questionKey, answerValue]) => ({
+    lead_id: leadId,
+    question_key: questionKey,
+    answer_value: answerValue as Json,
+    scored:
+      questionKey.startsWith("buyer.") || questionKey.startsWith("rental."),
+    updated_at: nowIso()
+  }))
+
+  if (answerUpserts.length === 0) {
+    return
+  }
+
+  const { error } = await client.from("lead_answers").upsert(answerUpserts, {
+    onConflict: "lead_id,question_key"
+  })
+
+  if (error) {
+    throw error
+  }
+}
+
+async function ensureLeadForInvite(
+  client: AppSupabaseClient,
+  inviteRow: Database["public"]["Tables"]["invites"]["Row"],
+  draft: IntakeDraft
+) {
+  if (inviteRow.lead_id) {
+    return inviteRow.lead_id
+  }
+
+  if (!canCreateLeadFromDraft(draft)) {
+    return undefined
+  }
+
+  const leadInput = buildLeadInputFromDraft(draft)
   const { data: lead, error: leadError } = await client
     .from("leads")
-    .select("id, status, token_expires_at")
-    .eq("token", token)
-    .maybeSingle()
+    .insert({
+      agent_id: inviteRow.agent_id,
+      buyer_name: leadInput.buyerName,
+      buyer_email: leadInput.buyerEmail ?? null,
+      buyer_phone: leadInput.buyerPhone ?? null,
+      intake_type: leadInput.intakeType,
+      token: inviteRow.token,
+      token_expires_at: inviteRow.token_expires_at,
+      status: "pending",
+      pipeline_stage: "new",
+      updated_at: nowIso()
+    })
+    .select("id")
+    .single()
 
   if (leadError) {
     throw leadError
   }
 
-  if (!lead) {
-    throw new Error("Lead not found.")
+  const { error: inviteError } = await client
+    .from("invites")
+    .update({
+      lead_id: lead.id,
+      status: "converted",
+      converted_at: nowIso(),
+      updated_at: nowIso()
+    })
+    .eq("id", inviteRow.id)
+
+  if (inviteError) {
+    throw inviteError
   }
 
-  assertLeadIntakeMutable(lead.status)
+  return lead.id
+}
 
-  if (new Date(lead.token_expires_at).getTime() < Date.now()) {
+export async function autosaveInviteDraft(
+  client: AppSupabaseClient,
+  token: string,
+  draft: IntakeDraft
+) {
+  const { data: invite, error: inviteError } = await client
+    .from("invites")
+    .select("*")
+    .eq("token", token)
+    .maybeSingle()
+
+  if (inviteError) {
+    throw inviteError
+  }
+
+  if (!invite) {
+    throw new Error("Invite not found.")
+  }
+
+  if (new Date(invite.token_expires_at).getTime() < Date.now()) {
     throw new Error("This intake link has expired.")
   }
 
-  const { error } = await client.from("lead_answers").upsert(
-    {
-      lead_id: lead.id,
-      question_key: questionKey,
-      answer_value: value as Json,
-      scored: isCoreQuestionKey(questionKey),
-      updated_at: nowIso()
-    },
-    {
-      onConflict: "lead_id,question_key"
-    }
-  )
+  const leadId = await ensureLeadForInvite(client, invite, draft)
 
-  if (error) {
-    throw error
+  if (leadId) {
+    const { data: lead, error: leadError } = await client
+      .from("leads")
+      .select("status")
+      .eq("id", leadId)
+      .single()
+
+    if (leadError) {
+      throw leadError
+    }
+
+    assertLeadIntakeMutable(lead.status)
   }
 
-  const { error: leadUpdateError } = await client
-    .from("leads")
+  const { error: inviteUpdateError } = await client
+    .from("invites")
     .update({
+      draft_payload: draft as unknown as Json,
+      status: leadId ? "converted" : "opened",
+      opened_at: invite.opened_at ?? nowIso(),
       updated_at: nowIso()
     })
-    .eq("id", lead.id)
+    .eq("id", invite.id)
 
-  if (leadUpdateError) {
-    throw leadUpdateError
+  if (inviteUpdateError) {
+    throw inviteUpdateError
+  }
+
+  if (leadId) {
+    const leadInput = buildLeadInputFromDraft(draft)
+    const { error: leadUpdateError } = await client
+      .from("leads")
+      .update({
+        buyer_name: leadInput.buyerName,
+        buyer_email: leadInput.buyerEmail ?? null,
+        buyer_phone: leadInput.buyerPhone ?? null,
+        intake_type: leadInput.intakeType,
+        updated_at: nowIso()
+      })
+      .eq("id", leadId)
+
+    if (leadUpdateError) {
+      throw leadUpdateError
+    }
+
+    await upsertLeadAnswersFromDraft(client, leadId, draft)
   }
 }
 
-export async function submitLead(
+export async function submitInvite(
   client: AppSupabaseClient,
   token: string,
-  input: SubmitLeadInput
+  input: SubmitInviteInput
 ) {
   const context = await getLeadIntakeContext(client, token)
 
   if (!context) {
-    throw new Error("Lead not found.")
+    throw new Error("Invite not found.")
   }
 
   if (context.isExpired) {
     throw new Error("This intake link has expired.")
   }
 
-  assertLeadIntakeMutable(context.lead.status)
-  assertCompleteAnswers(input.answers, context.lead.intakeType)
-  const scored = scoreLead(
-    input.answers,
-    context.settings.showThreshold
-  )
+  assertDraftSubmissionComplete(input.draft)
+  await autosaveInviteDraft(client, token, input.draft)
 
-  const answerUpserts = [
-    ...Object.entries(input.answers).map(([questionKey, answerValue]) => ({
-      lead_id: context.lead.id,
-      question_key: questionKey,
-      answer_value: answerValue as Json,
-      scored: true,
-      updated_at: nowIso()
-    })),
-    ...Object.entries(input.customAnswers ?? {}).map(([questionKey, answerValue]) => ({
-      lead_id: context.lead.id,
-      question_key: questionKey,
-      answer_value: answerValue as Json,
-      scored: false,
-      updated_at: nowIso()
-    }))
-  ]
-
-  const { error: answersError } = await client.from("lead_answers").upsert(
-    answerUpserts,
-    {
-      onConflict: "lead_id,question_key"
-    }
-  )
-
-  if (answersError) {
-    throw answersError
+  const refreshed = await getLeadIntakeContext(client, token)
+  if (!refreshed?.lead) {
+    throw new Error("Lead not found.")
   }
 
+  assertLeadIntakeMutable(refreshed.lead.status)
+  const submission = input.draft as IntakeSubmission
+  const scored = scoreLead(submission, refreshed.settings.showThreshold)
+  const persistedSummary = `${scored.summary} ${scored.nextAction}`.trim()
+
+  await upsertLeadAnswersFromDraft(client, refreshed.lead.id, input.draft)
+
   const { error: scoreError } = await client.from("lead_scores").insert({
-    lead_id: context.lead.id,
+    lead_id: refreshed.lead.id,
     total: scored.total,
     recommendation: scored.recommendation,
-    summary: scored.summary,
+    summary: persistedSummary,
     breakdown: scored.breakdown as unknown as Json,
     overridden: false
   })
@@ -963,11 +1197,11 @@ export async function submitLead(
       pipeline_stage: recommendationToStage(scored.recommendation),
       score: scored.total,
       recommendation: scored.recommendation,
-      summary: scored.summary,
+      summary: persistedSummary,
       submitted_at: nowIso(),
       updated_at: nowIso()
     })
-    .eq("id", context.lead.id)
+    .eq("id", refreshed.lead.id)
     .select("*")
     .single()
 
@@ -978,7 +1212,7 @@ export async function submitLead(
   const { data: answerRows, error: answerRowsError } = await client
     .from("lead_answers")
     .select("*")
-    .eq("lead_id", context.lead.id)
+    .eq("lead_id", refreshed.lead.id)
     .order("updated_at", { ascending: true })
 
   if (answerRowsError) {
@@ -991,16 +1225,16 @@ export async function submitLead(
       answerRows ?? [],
       {
         id: randomUUID(),
-        lead_id: context.lead.id,
+        lead_id: refreshed.lead.id,
         total: scored.total,
         recommendation: scored.recommendation,
-        summary: scored.summary,
+        summary: persistedSummary,
         breakdown: scored.breakdown as unknown as Json,
         overridden: false,
         override_meta: null,
         created_at: nowIso()
       }
     ),
-    settings: context.settings
+    settings: refreshed.settings
   }
 }

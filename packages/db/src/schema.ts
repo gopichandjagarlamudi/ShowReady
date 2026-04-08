@@ -38,6 +38,12 @@ export const notificationPreferenceEnum = pgEnum("notification_preference", [
 ]);
 
 export const intakeTypeEnum = pgEnum("intake_type", ["sale", "rental"]);
+export const inviteStatusEnum = pgEnum("invite_status", [
+  "generated",
+  "opened",
+  "converted",
+  "expired"
+]);
 
 const auth = pgSchema("auth");
 
@@ -156,6 +162,36 @@ export const leads = pgTable(
     agentStageUpdatedIdx: index("leads_agent_id_pipeline_stage_updated_at_idx").on(
       table.agentId,
       table.pipelineStage,
+      table.updatedAt
+    )
+  })
+);
+
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, {
+        onDelete: "cascade"
+      }),
+    token: text("token").notNull().unique(),
+    status: inviteStatusEnum("status").default("generated").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }).notNull(),
+    draftPayload: jsonb("draft_payload").notNull(),
+    leadId: uuid("lead_id").references(() => leads.id, {
+      onDelete: "set null"
+    }),
+    openedAt: timestamp("opened_at", { withTimezone: true }),
+    convertedAt: timestamp("converted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => ({
+    agentIdIdx: index("invites_agent_id_idx").on(table.agentId),
+    agentUpdatedIdx: index("invites_agent_id_updated_at_idx").on(
+      table.agentId,
       table.updatedAt
     )
   })

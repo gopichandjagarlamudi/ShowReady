@@ -1,200 +1,309 @@
 import type {
-  ExclusiveAgent,
-  Financing,
-  IntakeAnswers,
-  MoveReason,
-  PriorShowings,
+  BuyerQuestionnaireAnswers,
+  IntakeSubmission,
   Recommendation,
+  RentalQuestionnaireAnswers,
   ScoreBreakdown,
   ScoreResult,
-  Timeline
-} from "@showready/types";
-
-const TIMELINE_SCORES: Record<Timeline, number> = {
-  asap: 10,
-  "1_3mo": 8,
-  "3_6mo": 5,
-  "6_12mo": 2.5,
-  exploring: 1
-};
-
-const FINANCING_SCORES: Record<Financing, number> = {
-  cash: 10,
-  pre_approved: 9,
-  in_progress: 5,
-  no: 1
-};
-
-const AWARENESS_SCORES: Record<PriorShowings, number> = {
-  many: 8,
-  few: 5,
-  none: 3
-};
-
-const URGENT_REASONS = new Set<MoveReason>([
-  "job_change",
-  "relocation",
-  "lease_ending"
-]);
+  WorkedWithAnotherRealtor
+} from "@showready/types"
 
 const WEIGHTS = {
-  timeline: 0.28,
-  financing: 0.28,
-  commitment: 0.2,
-  motivation: 0.14,
-  awareness: 0.1
-} as const;
-
-function scoreMotivation(reasons: MoveReason[]): number {
-  const urgentCount = reasons.filter((reason) => URGENT_REASONS.has(reason))
-    .length;
-
-  if (urgentCount >= 2) {
-    return 10;
-  }
-
-  if (urgentCount === 1) {
-    return 7;
-  }
-
-  return 4;
-}
-
-function scoreCommitment(
-  offerReadiness: number,
-  exclusiveAgent: ExclusiveAgent
-): number {
-  const base = offerReadiness * 2;
-  const penalty = exclusiveAgent === "yes_exclusive" ? 2 : 0;
-
-  return Math.max(0, Math.min(10, base - penalty));
-}
-
-function applyOverrides(score: number, answers: IntakeAnswers): number {
-  let adjusted = score;
-
-  if (answers.financing === "no" && answers.timeline === "asap") {
-    adjusted = Math.min(adjusted, 5);
-  }
-
-  if (answers.exclusiveAgent === "yes_exclusive") {
-    adjusted = Math.max(1, adjusted - 2);
-  }
-
-  if (answers.financing === "cash" && answers.timeline === "asap") {
-    adjusted = Math.max(adjusted, 8.5);
-  }
-
-  return adjusted;
-}
+  urgency: 0.26,
+  finances: 0.24,
+  clarity: 0.18,
+  readiness: 0.18,
+  fit: 0.14
+} as const
 
 function getRecommendation(
   total: number,
   showThreshold: number
 ): Recommendation {
   if (total >= showThreshold) {
-    return "show";
+    return "show"
   }
 
   if (total >= 5) {
-    return "nurture";
+    return "nurture"
   }
 
-  return "hold";
+  return "hold"
+}
+
+function scoreBuyerUrgency(timeline: BuyerQuestionnaireAnswers["timeline"]) {
+  switch (timeline) {
+    case "asap":
+      return 10
+    case "within_1_month":
+      return 9
+    case "1_3_months":
+      return 7
+    case "3_6_months":
+      return 4.5
+    case "6_plus_months":
+      return 2
+    case "exploring":
+      return 1
+  }
+}
+
+function scoreBuyerFinances(
+  budgetKnowledge: BuyerQuestionnaireAnswers["budgetKnowledge"],
+  mortgageStatus: BuyerQuestionnaireAnswers["mortgageStatus"]
+) {
+  const budgetScore =
+    budgetKnowledge === "know_it" ? 9 : budgetKnowledge === "rough_idea" ? 6 : 2
+  const mortgageScore =
+    mortgageStatus === "pre_approved" || mortgageStatus === "cash"
+      ? 10
+      : mortgageStatus === "not_yet"
+        ? 3
+        : 1
+
+  return Number.parseFloat(((budgetScore + mortgageScore) / 2).toFixed(2))
+}
+
+function scoreBuyerClarity(answers: BuyerQuestionnaireAnswers) {
+  let score = 4
+
+  if (answers.neighborhoods.trim()) {
+    score += 3
+  }
+
+  if (answers.propertyType !== "other") {
+    score += 2
+  }
+
+  if (answers.bedrooms?.trim()) {
+    score += 0.5
+  }
+
+  if (answers.bathrooms?.trim()) {
+    score += 0.5
+  }
+
+  return Math.min(10, score)
+}
+
+function scoreBuyerReadiness(
+  workedWithAnotherRealtor: WorkedWithAnotherRealtor | undefined,
+  buyingFor: BuyerQuestionnaireAnswers["buyingFor"]
+) {
+  const relationshipScore =
+    workedWithAnotherRealtor === "no"
+      ? 8
+      : workedWithAnotherRealtor === "browsing" || workedWithAnotherRealtor === undefined
+        ? 5.5
+        : 3
+  const purchaseIntent =
+    buyingFor === "myself" ? 8 : buyingFor === "investment" ? 7 : 4.5
+
+  return Number.parseFloat(((relationshipScore + purchaseIntent) / 2).toFixed(2))
+}
+
+function scoreBuyerFit(answers: BuyerQuestionnaireAnswers) {
+  let score = 5
+
+  score += Math.min(answers.mustHaves?.length ?? 0, 3)
+
+  if (answers.additionalContext?.trim()) {
+    score += 1
+  }
+
+  return Math.min(10, score)
+}
+
+function scoreRentalUrgency(timeline: RentalQuestionnaireAnswers["moveTimeline"]) {
+  switch (timeline) {
+    case "asap":
+      return 10
+    case "within_2_weeks":
+      return 9
+    case "within_1_month":
+      return 8
+    case "1_3_months":
+      return 5
+    case "exploring":
+      return 1
+  }
+}
+
+function scoreRentalFinances(answers: RentalQuestionnaireAnswers) {
+  const incomeScore =
+    answers.incomeProof === "yes"
+      ? 9
+      : answers.incomeProof === "discuss_later"
+        ? 5
+        : answers.incomeProof === "no"
+          ? 2
+          : 4
+
+  const budgetScore =
+    answers.rentRange.trim().length > 0
+      ? answers.rentRange.includes("$")
+        ? 8
+        : 6
+      : 1
+
+  return Number.parseFloat(((incomeScore + budgetScore) / 2).toFixed(2))
+}
+
+function scoreRentalClarity(answers: RentalQuestionnaireAnswers) {
+  let score = 4
+
+  if (answers.neighborhoods.trim()) {
+    score += 3
+  }
+
+  if (answers.placeType !== "not_sure") {
+    score += 2
+  }
+
+  if (answers.bedrooms.trim()) {
+    score += 1
+  }
+
+  return Math.min(10, score)
+}
+
+function scoreRentalReadiness(answers: RentalQuestionnaireAnswers) {
+  let score =
+    answers.rentedInCanadaBefore === "yes"
+      ? 8
+      : answers.rentedInCanadaBefore === "no"
+        ? 5
+        : 6
+
+  if (answers.incomeProof === "yes") {
+    score += 1
+  } else if (answers.incomeProof === "no") {
+    score -= 1.5
+  }
+
+  return Math.max(1, Math.min(10, score))
+}
+
+function scoreRentalFit(answers: RentalQuestionnaireAnswers) {
+  let score = 5
+
+  score += Math.min(answers.mustHaves?.length ?? 0, 3)
+
+  if (answers.preferredMoveInDate?.trim()) {
+    score += 1
+  }
+
+  if (answers.additionalContext?.trim()) {
+    score += 1
+  }
+
+  return Math.min(10, score)
+}
+
+function buildBuyerBreakdown(answers: BuyerQuestionnaireAnswers): ScoreBreakdown {
+  return {
+    urgency: scoreBuyerUrgency(answers.timeline),
+    finances: scoreBuyerFinances(
+      answers.budgetKnowledge,
+      answers.mortgageStatus
+    ),
+    clarity: scoreBuyerClarity(answers),
+    readiness: scoreBuyerReadiness(
+      answers.workedWithAnotherRealtor,
+      answers.buyingFor
+    ),
+    fit: scoreBuyerFit(answers)
+  }
+}
+
+function buildRentalBreakdown(answers: RentalQuestionnaireAnswers): ScoreBreakdown {
+  return {
+    urgency: scoreRentalUrgency(answers.moveTimeline),
+    finances: scoreRentalFinances(answers),
+    clarity: scoreRentalClarity(answers),
+    readiness: scoreRentalReadiness(answers),
+    fit: scoreRentalFit(answers)
+  }
+}
+
+function getNextAction(
+  submission: IntakeSubmission,
+  recommendation: Recommendation
+) {
+  if (submission.intent === "buy") {
+    if (recommendation === "show") {
+      return "Book a buyer consultation and shortlist homes for an in-person showing."
+    }
+
+    if (recommendation === "nurture") {
+      return "Follow up on financing and narrow neighborhoods before booking a showing."
+    }
+
+    return "Keep this buyer in nurture until timing and financing become clearer."
+  }
+
+  if (recommendation === "show") {
+    return "Send rental matches now and line up viewings around the target move date."
+  }
+
+  if (recommendation === "nurture") {
+    return "Confirm rental documents and preferred move-in timing before touring."
+  }
+
+  return "Keep this rental lead warm until move timing and application readiness improve."
 }
 
 function buildSummary(
-  score: number,
+  submission: IntakeSubmission,
+  total: number,
   breakdown: ScoreBreakdown,
-  answers: IntakeAnswers,
   recommendation: Recommendation
-): string {
-  const strengths: string[] = [];
-  const concerns: string[] = [];
+) {
+  const focus =
+    submission.intent === "buy"
+      ? `buyer timeline ${submission.buyer.timeline.replaceAll("_", " ")}`
+      : `renter timeline ${submission.rental.moveTimeline.replaceAll("_", " ")}`
 
-  if (breakdown.timeline >= 8) {
-    strengths.push("strong timeline urgency");
-  } else if (breakdown.timeline <= 2.5) {
-    concerns.push("no clear move timeline");
-  }
+  const financeNote =
+    submission.intent === "buy"
+      ? `financing ${submission.buyer.mortgageStatus.replaceAll("_", " ")}`
+      : `income proof ${submission.rental.incomeProof?.replaceAll("_", " ") ?? "unknown"}`
 
-  if (breakdown.financing >= 9) {
-    strengths.push(`solid financing (${answers.financing})`);
-  } else if (breakdown.financing <= 1) {
-    concerns.push("no financing in place");
-  }
-
-  if (breakdown.commitment >= 8) {
-    strengths.push("high offer readiness");
-  }
-
-  if (answers.exclusiveAgent === "yes_exclusive") {
-    concerns.push("already committed to another agent");
-  }
-
-  if (breakdown.motivation >= 7) {
-    strengths.push("motivated by urgency");
-  }
-
-  const strengthsSummary = strengths.length
-    ? `Strengths: ${strengths.join(", ")}. `
-    : "";
-  const concernsSummary = concerns.length
-    ? `Watch: ${concerns.join(", ")}. `
-    : "";
-
-  const action =
-    recommendation === "show"
-      ? "Recommend booking a showing now."
-      : recommendation === "nurture"
-        ? "Follow up in 2–4 weeks."
-        : "Park in a longer-term nurture campaign.";
-
-  return `Score ${score}/10. ${strengthsSummary}${concernsSummary}${action}`.trim();
+  return `Score ${total}/10. Strongest signals: ${focus}, ${financeNote}, clarity ${breakdown.clarity.toFixed(1)}/10. Recommended path: ${recommendation.toUpperCase()}.`
 }
 
-export function getScoreBreakdown(answers: IntakeAnswers): ScoreBreakdown {
-  return {
-    timeline: TIMELINE_SCORES[answers.timeline],
-    financing: FINANCING_SCORES[answers.financing],
-    commitment: scoreCommitment(
-      answers.offerReadiness,
-      answers.exclusiveAgent
-    ),
-    motivation: scoreMotivation(answers.moveReasons),
-    awareness: AWARENESS_SCORES[answers.priorShowings]
-  };
+export function getScoreBreakdown(submission: IntakeSubmission): ScoreBreakdown {
+  return submission.intent === "buy"
+    ? buildBuyerBreakdown(submission.buyer)
+    : buildRentalBreakdown(submission.rental)
 }
 
 export function scoreLead(
-  answers: IntakeAnswers,
+  submission: IntakeSubmission,
   showThreshold = 8
 ): ScoreResult {
-  const breakdown = getScoreBreakdown(answers);
+  const breakdown = getScoreBreakdown(submission)
   const rawScore =
-    breakdown.timeline * WEIGHTS.timeline +
-    breakdown.financing * WEIGHTS.financing +
-    breakdown.commitment * WEIGHTS.commitment +
-    breakdown.motivation * WEIGHTS.motivation +
-    breakdown.awareness * WEIGHTS.awareness;
+    breakdown.urgency * WEIGHTS.urgency +
+    breakdown.finances * WEIGHTS.finances +
+    breakdown.clarity * WEIGHTS.clarity +
+    breakdown.readiness * WEIGHTS.readiness +
+    breakdown.fit * WEIGHTS.fit
 
-  const total = Number.parseFloat(
-    applyOverrides(rawScore, answers).toFixed(2)
-  );
-  const recommendation = getRecommendation(total, showThreshold);
+  const total = Number.parseFloat(rawScore.toFixed(2))
+  const recommendation = getRecommendation(total, showThreshold)
+  const nextAction = getNextAction(submission, recommendation)
 
   return {
     total,
     breakdown,
     recommendation,
-    summary: buildSummary(total, breakdown, answers, recommendation),
+    summary: buildSummary(submission, total, breakdown, recommendation),
+    nextAction,
     effectiveShowThreshold: showThreshold
-  };
+  }
 }
 
 export const scoringConfig = {
-  weights: WEIGHTS,
-  timeline: TIMELINE_SCORES,
-  financing: FINANCING_SCORES,
-  awareness: AWARENESS_SCORES
-};
+  weights: WEIGHTS
+}

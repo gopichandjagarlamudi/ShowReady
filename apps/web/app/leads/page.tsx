@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { LeadCard } from "@/components/lead-card";
+import { LeadsManager } from "@/components/leads-manager";
 import { getCurrentAgentContext } from "@/lib/session";
 import { listLeads } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -12,15 +12,11 @@ export default async function LeadsPage() {
   }
 
   const supabase = await createSupabaseServerClient()
-  const leads = await listLeads(supabase, context.agent.id);
+  const leads = await listLeads(supabase, context.agent.id)
 
   return (
     <AppShell currentPath="/leads" eyebrow={context.settings.brandName} heading="All leads">
-      <div className="grid gap-4 xl:grid-cols-2">
-        {leads.map((lead) => (
-          <LeadCard key={lead.id} lead={lead} />
-        ))}
-      </div>
+      <LeadsManager leads={leads} />
     </AppShell>
   );
 }

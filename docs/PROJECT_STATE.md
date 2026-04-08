@@ -4,6 +4,22 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Fixed the lead detail stage controls so the page now derives manual move targets from a shared helper, excludes the lead's current stage from the action list, keeps `new` out of the manual destination set, and allows `closed` leads to reopen back into `ready`, `nurture`, or `hold`.
+- Added `apps/web/lib/lead-stage.ts` plus focused coverage in `apps/web/lib/lead-stage.test.ts`, then verified the transition rules with `corepack pnpm --filter @showready/web test -- lib/lead-stage.test.ts` and `corepack pnpm --filter @showready/web typecheck`.
+- Reworked the `/leads` page into a stage-grouped pipeline surface: the existing `ready`, `nurture`, `hold`, `new`, and `closed` stages now render as stacked sections with counts, descriptive sublabels, empty states, and stage-aware visual treatment instead of one undifferentiated card grid.
+- Updated the leads UI presentation so `ready` is now labeled `Ready to show` throughout the leads page while preserving the underlying stage contract, selection model, delete actions, and detail links.
+- Added focused UI coverage in `apps/web/components/leads-manager.test.tsx` and expanded `apps/web/vitest.config.ts` to support `@/` alias resolution plus JSX component tests, then verified the grouped leads page with the targeted Vitest run, web typecheck, and local desktop/mobile browser checks on `/leads`.
+- Made the dashboard generated-link panel resilient to action redirect issues by falling back to the newest non-converted invite from the database, so the launcher can still show a copyable active invite link even if the `?invite=` query param does not come back after creation.
+- Tightened the agent lead-management surfaces again: the dashboard invite launcher now renders a dedicated `Generated link` panel with copy-ready messaging, `/leads` now shows only real leads instead of open invites, and agents can now delete leads with confirmation either one at a time or in bulk from the leads page.
+- Cleaned up the dashboard invite presentation so newly generated links now stay only inside the invite launcher result area instead of also showing up as `Unnamed invite` cards on the dashboard; open invite tracking remains on `/leads`, while completed submissions still surface under dashboard `Recent leads`.
+- Replaced the old lead-first magic-link launcher with an invite-first flow: agents now generate standalone invite links from the dashboard, no lead row is created up front, and the public intake creates/converts the lead only after the recipient enters contact details plus buy/rent intent.
+- Added invite persistence across the shared type system, Supabase database contract, and runtime data layer: `packages/types/src/index.ts` now models invite status plus explicit buyer/rental questionnaire drafts, `packages/db/src/schema.ts` and `packages/db/migrations/0000_showready_phase1.sql` now include the `invites` table and `invite_status` enum, and `packages/db/migrations/0002_magic_link_invites.sql` was applied to the connected Supabase project.
+- Reworked the public intake experience around the new product structure in `apps/web/components/intake-form.tsx`: intro screen, contact capture, buy-vs-rent branch, fixed required buyer/rental questions, optional refinement questions, capped custom questions, mobile one-question flow, progress bar, and final completion state.
+- Replaced the old shared intake-answer/scoring assumptions with branch-specific contracts and scoring: `@showready/types` now exposes explicit buyer/rental answer shapes and helpers, and `@showready/scoring` now computes score, recommendation, summary, and next action directly from the new questionnaires instead of the previous legacy answer map.
+- Updated the server routes and Supabase data helpers so autosave and submit work against invite tokens rather than precreated leads, create the lead only when contact plus intent exist, persist draft answers consistently, and reject invalid/expired/already-converted invite paths.
+- Updated the dashboard and lead-management surfaces so the dashboard generates and lists invite links, the leads index shows open invites separately from submitted leads, and lead detail renders the new structured buyer/rental answers instead of the old generic readiness field set.
+- Reworked the Supabase seed path to create converted invites for seeded leads plus fresh open invite tokens for buyer/rental browser verification, and added new tests covering the draft helpers, intake config, shared types, new scoring logic, and public invite flows.
+- Verified the redesign with `corepack pnpm --filter @showready/types test -- tests/intake.test.ts`, `corepack pnpm --filter @showready/scoring test -- tests/index.test.ts`, `corepack pnpm --filter @showready/web test -- lib/intake-draft.test.ts lib/intake-config.test.ts lib/intake-guards.test.ts`, `corepack pnpm --filter @showready/web typecheck`, `psql "$DATABASE_URL" -f packages/db/migrations/0002_magic_link_invites.sql`, `corepack pnpm --filter @showready/web seed:supabase`, and `corepack pnpm --filter @showready/web test:e2e -- tests/e2e/invite-flow.spec.ts`.
 - Connected the existing Vercel `showready` project directly to the GitHub repository `gopichandjagarlamudi/ShowReady`, with `master` configured as the production branch so future Git pushes can trigger Vercel deployments without the manual CLI deploy path.
 - Fixed the Vercel monorepo deployment path for the existing `showready` project by updating the remote project root to `apps/web`, enabling source files outside the root directory, adding a repo `.vercelignore`, and linking the local checkout to that project instead of relying on a temporary standalone bundle.
 - Added explicit monorepo root config in `apps/web/next.config.ts` (`turbopack.root` and `outputFileTracingRoot`) so local and Vercel Next.js 16/Turbopack builds resolve workspace packages from the repo root consistently.
@@ -54,6 +70,15 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - Tightened the `AGENTS.md` documentation-maintenance rule so repo-memory updates are required after meaningful work that changes behavior, workflow, status, risks, blockers, or verification state, rather than after any trivial edit.
 
 ## Likely Active Files / Areas
+- `apps/web/components/leads-manager.tsx`
+- `apps/web/components/leads-manager.test.tsx`
+- `apps/web/vitest.config.ts`
+- `apps/web/app/dashboard/page.tsx`
+- `apps/web/app/intake/[token]/page.tsx`
+- `apps/web/app/api/intake/[token]/*`
+- `apps/web/app/leads/page.tsx`
+- `apps/web/app/leads/[leadId]/page.tsx`
+- `apps/web/lib/intake-draft.ts`
 - `apps/web/app/page.tsx`
 - `apps/web/lib/intake-config.ts`
 - `apps/web/lib/auth-url.ts`
@@ -70,15 +95,18 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `packages/db/src/schema.ts`
 - `packages/db/migrations/0000_showready_phase1.sql`
 - `packages/db/migrations/0001_sale_rental_intake.sql`
+- `packages/db/migrations/0002_magic_link_invites.sql`
+- `packages/types/src/index.ts`
+- `packages/scoring/src/index.ts`
 - `apps/web/scripts/seed-supabase.ts`
 
 ## Open Issues / Loose Ends
-- Browser verification of the agent-authenticated dashboard-to-create-lead flow is still blocked by the current local `/auth/login` redirect bounce back to `/login`; the new intake browser smoke verifies seeded public sale/rental links directly instead.
+- Browser verification of the local agent-authenticated dashboard and lead-detail surfaces is still blocked by the current `/auth/login` redirect bounce back to `/login`; the new lead-detail stage-control change was verified with targeted Vitest coverage and typecheck only, while `apps/web/tests/e2e/dashboard-invite.spec.ts` remains skipped until the local auth redirect loop is fixed or replaced with a reliable authenticated setup path.
 - Preview deployments protected by Vercel Authentication still return `HTTP 500` on browser `POST /auth/register` before runtime code executes, even after the app-side share-token preservation fix; this appears to be a platform protection constraint rather than an app runtime exception.
 - Google OAuth reaches the live Google sign-in screen with the correct production callback, but a full callback completion still requires entering a real Google account in the browser.
 - Email/password signup now works on production while Supabase email confirmation remains disabled; if confirmations are re-enabled, the previous email-send rate-limit constraint is expected to return unless Auth email delivery is reconfigured.
 - Observability is still a console wrapper in `apps/web/lib/observability.ts`.
-- Public token-based intake uses server-side admin-client validation rather than DB RPCs/security-definer SQL functions.
+- Public invite-based intake still uses server-side admin-client validation/mutations rather than DB RPCs or security-definer SQL functions.
 - The new auth redirect and intake-mutability protections currently have unit coverage only; there is still no browser-level regression that exercises a rejected resubmission or a malicious callback `next` value end to end.
 - The repo has no commits yet; history must be inferred from files and docs, not git.
 
@@ -89,6 +117,8 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - If the SQL migration drifts from the checked-in file, the app can diverge from the hand-written `Database` type and runtime assumptions.
 - The demo seed and admin-backed flows depend on `SUPABASE_SERVICE_ROLE_KEY`; rotating or removing it locally will break those paths.
 - RLS and auth trigger behavior are now part of the product contract; changes there can silently break onboarding or lead access.
+- Invite conversion now spans `invites`, `leads`, `lead_answers`, and `lead_scores`; partial regressions in that path can leave an invite opened but not converted unless autosave/submit guards stay aligned.
+- Deleting a lead now also deletes any converted invite rows pointing at that lead; if invite retention becomes a reporting requirement later, that delete behavior will need to be revisited deliberately.
 - `packages/*/dist`, `.turbo/`, and `apps/web/.next/` are local build outputs, not source-of-truth files.
 
 ## Next-Thread Bootstrap Steps
@@ -96,7 +126,7 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 2. Run `git status`.
 3. Verify whether the target Supabase project env vars are present locally.
 4. Skim `README.md`, `proxy.ts`, `apps/web/lib/intake-config.ts`, `apps/web/lib/supabase`, and the closest app route files.
-5. If the task involves real runtime verification, ensure both `packages/db/migrations/0000_showready_phase1.sql` and `packages/db/migrations/0001_sale_rental_intake.sql` have been applied, then run `corepack pnpm --filter @showready/web seed:supabase`.
+5. If the task involves real runtime verification, ensure `packages/db/migrations/0000_showready_phase1.sql`, `packages/db/migrations/0001_sale_rental_intake.sql`, and `packages/db/migrations/0002_magic_link_invites.sql` have been applied, then run `corepack pnpm --filter @showready/web seed:supabase`.
 
 ## How Future Codex Threads Should Start
 - Start with `AGENTS.md`.
@@ -115,4 +145,5 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - This thread also established that preview-protected Vercel deployments are not currently a trustworthy verification surface for the email signup POST itself: the platform returns `500` on `POST /auth/register` before app runtime logs appear, while the same code path behaves correctly in local production mode.
 - This thread also promoted the auth-fix bundle to the public production alias so the remaining Google OAuth verification can happen on `showready-jet.vercel.app` instead of a Vercel-auth-protected preview deployment.
 - This thread also confirmed that disabling Supabase email confirmations immediately unblocked production self-serve signup, while Google OAuth on the same deployment now reaches Google with the expected `/auth/callback` redirect target.
+- This thread also replaced the dashboard lead-creation assumption with the invite-first intake architecture, rewired autosave/submit around invite conversion, and verified the buyer and rental public invite flows end to end in Playwright after reseeding the Supabase demo data.
 - Future threads should not assume the old mock JSON store is still on the active request path.

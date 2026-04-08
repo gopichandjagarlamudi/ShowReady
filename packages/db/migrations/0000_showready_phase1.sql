@@ -5,6 +5,7 @@ create type "lead_stage" as enum ('new', 'ready', 'nurture', 'hold', 'closed');
 create type "recommendation" as enum ('show', 'nurture', 'hold');
 create type "notification_preference" as enum ('email', 'email_and_push');
 create type "intake_type" as enum ('sale', 'rental');
+create type "invite_status" as enum ('generated', 'opened', 'converted', 'expired');
 
 create table "agents" (
   "id" uuid primary key not null references auth.users(id) on delete cascade,
@@ -61,6 +62,21 @@ create table "leads" (
   constraint "leads_token_unique" unique("token")
 );
 
+create table "invites" (
+  "id" uuid primary key default gen_random_uuid() not null,
+  "agent_id" uuid not null references public.agents(id) on delete cascade,
+  "token" text not null,
+  "status" "invite_status" default 'generated' not null,
+  "token_expires_at" timestamp with time zone not null,
+  "draft_payload" jsonb not null,
+  "lead_id" uuid references public.leads(id) on delete set null,
+  "opened_at" timestamp with time zone,
+  "converted_at" timestamp with time zone,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null,
+  constraint "invites_token_unique" unique("token")
+);
+
 create table "lead_answers" (
   "id" uuid primary key default gen_random_uuid() not null,
   "lead_id" uuid not null references public.leads(id) on delete cascade,
@@ -89,6 +105,8 @@ create index "agent_settings_question_template_id_idx" on "agent_settings" ("que
 create index "leads_agent_id_idx" on "leads" ("agent_id");
 create index "leads_agent_id_updated_at_idx" on "leads" ("agent_id", "updated_at" desc);
 create index "leads_agent_id_pipeline_stage_updated_at_idx" on "leads" ("agent_id", "pipeline_stage", "updated_at" desc);
+create index "invites_agent_id_idx" on "invites" ("agent_id");
+create index "invites_agent_id_updated_at_idx" on "invites" ("agent_id", "updated_at" desc);
 create index "lead_answers_lead_id_idx" on "lead_answers" ("lead_id");
 create unique index "lead_answers_lead_id_question_key_idx" on "lead_answers" ("lead_id", "question_key");
 create index "lead_scores_lead_id_idx" on "lead_scores" ("lead_id");
@@ -105,6 +123,11 @@ $$;
 
 create trigger set_leads_updated_at
 before update on public.leads
+for each row
+execute function public.set_updated_at();
+
+create trigger set_invites_updated_at
+before update on public.invites
 for each row
 execute function public.set_updated_at();
 
@@ -230,6 +253,8 @@ alter table public.agent_settings enable row level security;
 alter table public.agent_settings force row level security;
 alter table public.leads enable row level security;
 alter table public.leads force row level security;
+alter table public.invites enable row level security;
+alter table public.invites force row level security;
 alter table public.lead_answers enable row level security;
 alter table public.lead_answers force row level security;
 alter table public.lead_scores enable row level security;
@@ -308,6 +333,27 @@ on public.leads
 for update
 using ((select auth.uid()) = agent_id)
 with check ((select auth.uid()) = agent_id);
+
+create policy "invites_select_own"
+on public.invites
+for select
+using ((select auth.uid()) = agent_id);
+
+create policy "invites_insert_own"
+on public.invites
+for insert
+with check ((select auth.uid()) = agent_id);
+
+create policy "invites_update_own"
+on public.invites
+for update
+using ((select auth.uid()) = agent_id)
+with check ((select auth.uid()) = agent_id);
+
+create policy "invites_delete_own"
+on public.invites
+for delete
+using ((select auth.uid()) = agent_id);
 
 create policy "leads_delete_own"
 on public.leads

@@ -121,6 +121,36 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["leads"]["Insert"]>
         Relationships: []
       }
+      invites: {
+        Row: {
+          id: string
+          agent_id: string
+          token: string
+          status: "generated" | "opened" | "converted" | "expired"
+          token_expires_at: string
+          draft_payload: Json
+          lead_id: string | null
+          opened_at: string | null
+          converted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          agent_id: string
+          token: string
+          status?: "generated" | "opened" | "converted" | "expired"
+          token_expires_at: string
+          draft_payload: Json
+          lead_id?: string | null
+          opened_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["invites"]["Insert"]>
+        Relationships: []
+      }
       lead_answers: {
         Row: {
           id: string
@@ -176,6 +206,7 @@ export type Database = {
       recommendation: "show" | "nurture" | "hold"
       notification_preference: "email" | "email_and_push"
       intake_type: "sale" | "rental"
+      invite_status: "generated" | "opened" | "converted" | "expired"
     }
     CompositeTypes: Record<string, never>
   }

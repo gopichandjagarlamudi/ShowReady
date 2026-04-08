@@ -1,7 +1,7 @@
-import { Card } from "@/components/ui/card";
-import { IntakeForm } from "@/components/intake-form";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getLeadIntakeContext } from "@/lib/supabase/data";
+import { Card } from "@/components/ui/card"
+import { IntakeForm } from "@/components/intake-form"
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getLeadIntakeContext } from "@/lib/supabase/data"
 
 export default async function IntakePage({
   params
@@ -10,7 +10,7 @@ export default async function IntakePage({
 }) {
   const { token } = await params;
   const supabase = createSupabaseAdminClient()
-  const context = await getLeadIntakeContext(supabase, token);
+  const context = await getLeadIntakeContext(supabase, token)
 
   if (!context) {
     return (
@@ -42,17 +42,13 @@ export default async function IntakePage({
     <main className="min-h-dvh py-6">
       <IntakeForm
         token={token}
-        buyerName={context.lead.buyerName}
         agentName={context.agent.fullName}
         brandName={context.settings.brandName}
         brandColor={context.settings.brandColor}
         accentColor={context.settings.accentColor}
-        introHeadline={context.template.introHeadline}
-        introBody={context.template.introBody}
-        initialAnswers={context.lead.answers ?? {}}
-        initialCustomAnswers={context.lead.customAnswers ?? {}}
-        questions={context.questions}
-        customQuestions={context.template.customQuestions}
+        saleTemplate={context.templates.sale}
+        rentalTemplate={context.templates.rental}
+        initialDraft={context.draft}
       />
     </main>
   );

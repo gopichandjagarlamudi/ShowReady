@@ -1,68 +1,113 @@
 import { describe, expect, test } from "vitest";
 import { scoreLead } from "../src/index";
-import type { IntakeAnswers } from "@showready/types";
+import type {
+  BuyerQuestionnaireAnswers,
+  LeadContactInfo,
+  RentalQuestionnaireAnswers
+} from "@showready/types";
 
-const baseAnswers: IntakeAnswers = {
+const contact: LeadContactInfo = {
+  fullName: "Sofia Chen",
+  email: "sofia@example.com",
+  phone: "+1 416 555 0101"
+}
+
+const buyerAnswers: BuyerQuestionnaireAnswers = {
+  buyingFor: "myself",
   timeline: "asap",
-  financing: "pre_approved",
-  budgetBand: "800k_1m",
-  exclusiveAgent: "no",
-  moveReasons: ["relocation", "job_change"],
-  priorShowings: "few",
-  offerReadiness: 4,
-  notes: "Need a backyard for the dog."
+  budgetKnowledge: "know_it",
+  mortgageStatus: "pre_approved",
+  neighborhoods: "Leslieville, Riverdale",
+  propertyType: "detached",
+  bedrooms: "3+",
+  bathrooms: "2+",
+  mustHaves: ["backyard", "parking"],
+  workedWithAnotherRealtor: "no",
+  additionalContext: "Need a backyard for the dog."
+}
+
+const rentalAnswers: RentalQuestionnaireAnswers = {
+  moveTimeline: "within_1_month",
+  rentRange: "$2,000–$2,500/mo",
+  neighborhoods: "Liberty Village",
+  placeType: "condo",
+  bedrooms: "1",
+  hasPets: "no",
+  occupantCount: "2",
+  incomeProof: "yes",
+  preferredMoveInDate: "2026-05-01",
+  mustHaves: ["laundry", "near_transit"],
+  rentedInCanadaBefore: "yes",
+  additionalContext: "Need easy subway access."
 };
 
 describe("scoreLead", () => {
-  test("scores a strong buyer as show with a detailed summary", () => {
-    const result = scoreLead(baseAnswers, 8);
-
-    expect(result.total).toBe(8.82);
-    expect(result.recommendation).toBe("show");
-    expect(result.breakdown.timeline).toBe(10);
-    expect(result.summary).toContain("Recommend booking a showing now.");
-    expect(result.summary).toContain("strong timeline urgency");
-  });
-
-  test("caps unfinanced urgent buyers into nurture territory", () => {
+  test("scores a strong buyer as show with a buyer-specific next action", () => {
     const result = scoreLead(
       {
-        ...baseAnswers,
-        financing: "no"
+        contact,
+        intent: "buy",
+        buyer: buyerAnswers
       },
       8
     );
 
-    expect(result.total).toBe(5);
-    expect(result.recommendation).toBe("nurture");
-    expect(result.summary).toContain("no financing in place");
+    expect(result.total).toBeGreaterThanOrEqual(8);
+    expect(result.recommendation).toBe("show");
+    expect(result.breakdown.urgency).toBeGreaterThanOrEqual(8);
+    expect(result.summary).toContain("buyer");
+    expect(result.nextAction).toContain("showing")
   });
 
-  test("applies a custom show threshold per agent", () => {
+  test("keeps underprepared buyers in nurture territory", () => {
     const result = scoreLead(
       {
-        ...baseAnswers,
-        timeline: "1_3mo",
-        moveReasons: ["upsizing"]
+        contact,
+        intent: "buy",
+        buyer: {
+          ...buyerAnswers,
+          budgetKnowledge: "not_yet",
+          mortgageStatus: "not_yet",
+          workedWithAnotherRealtor: "yes"
+        }
+      },
+      8
+    );
+
+    expect(result.total).toBeLessThan(8)
+    expect(["nurture", "hold"]).toContain(result.recommendation)
+    expect(result.summary).toContain("financing")
+  });
+
+  test("applies a custom show threshold per agent for buyers", () => {
+    const result = scoreLead(
+      {
+        contact,
+        intent: "buy",
+        buyer: {
+          ...buyerAnswers,
+          timeline: "1_3_months",
+          buyingFor: "investment"
+        }
       },
       8.5
     );
 
-    expect(result.total).toBe(7.42);
     expect(result.recommendation).toBe("nurture");
   });
 
-  test("rewards cash buyers with immediate urgency", () => {
+  test("scores prepared renters with a rental-specific next action", () => {
     const result = scoreLead(
       {
-        ...baseAnswers,
-        financing: "cash",
-        priorShowings: "none"
+        contact,
+        intent: "rent",
+        rental: rentalAnswers
       },
       8
     );
 
-    expect(result.total).toBeGreaterThanOrEqual(8.5);
-    expect(result.recommendation).toBe("show");
+    expect(result.total).toBeGreaterThan(6)
+    expect(["show", "nurture"]).toContain(result.recommendation)
+    expect(result.nextAction).toContain("rental")
   });
 });

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { captureServerError } from "@/lib/observability";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { autosaveLeadAnswer } from "@/lib/supabase/data";
+import { autosaveInviteDraft } from "@/lib/supabase/data";
+import type { IntakeDraft } from "@showready/types";
 
 export async function POST(
   request: Request,
@@ -12,10 +13,9 @@ export async function POST(
   try {
     const supabase = createSupabaseAdminClient()
     const payload = (await request.json()) as {
-      questionKey: string;
-      value: string | string[] | number;
+      draft: IntakeDraft;
     };
-    await autosaveLeadAnswer(supabase, token, payload.questionKey, payload.value);
+    await autosaveInviteDraft(supabase, token, payload.draft);
     return NextResponse.json({ ok: true });
   } catch (error) {
     captureServerError(error, "api.intake.autosave");

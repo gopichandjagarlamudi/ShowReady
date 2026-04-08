@@ -3,15 +3,20 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { GeneratedLinkPanel } from "@/components/generated-link-panel";
 import { LiveRefresh } from "@/components/live-refresh";
 import { LeadCard } from "@/components/lead-card";
-import { createLeadAction } from "@/lib/actions";
+import { createInviteAction } from "@/lib/actions";
 import { getCurrentAgentContext } from "@/lib/session";
-import { getAnalyticsSummary, listLeads } from "@/lib/supabase/data";
+import { buildAppUrl } from "@/lib/utils";
+import { getAnalyticsSummary, listInvites, listLeads } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ invite?: string }>
+}) {
   const context = await getCurrentAgentContext();
   if (!context) {
     redirect("/login");
@@ -22,11 +27,17 @@ export default async function DashboardPage() {
   }
 
   const supabase = await createSupabaseServerClient()
+  const query = searchParams ? await searchParams : undefined
 
-  const [summary, leads] = await Promise.all([
+  const [summary, leads, invites] = await Promise.all([
     getAnalyticsSummary(supabase, context.agent.id),
-    listLeads(supabase, context.agent.id)
+    listLeads(supabase, context.agent.id),
+    listInvites(supabase, context.agent.id)
   ]);
+  const latestInviteFromQuery =
+    query?.invite ? invites.find((invite) => invite.token === query.invite) : undefined
+  const latestActiveInvite = invites.find((invite) => invite.status !== "converted")
+  const latestInvite = latestInviteFromQuery ?? latestActiveInvite
 
   return (
     <AppShell
@@ -79,54 +90,27 @@ export default async function DashboardPage() {
         </Card>
         <Card className="p-6">
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-[color:var(--muted-ink)]">
-            New lead launcher
+            Invite launcher
           </p>
           <h2 className="mt-4 font-display text-3xl text-[color:var(--ink)]">
-            Send a magic link in under a minute
+            Generate a magic link in under a minute
           </h2>
-          <form action={createLeadAction} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="buyerName" className="mb-2 block text-sm font-medium">
-                Buyer name
-              </label>
-              <Input id="buyerName" name="buyerName" required />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="intakeType" className="mb-2 block text-sm font-medium">
-                  Intake type
-                </label>
-                <select
-                  id="intakeType"
-                  name="intakeType"
-                  defaultValue="sale"
-                  className="min-h-11 w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm"
-                >
-                  <option value="sale">Sale questionnaire</option>
-                  <option value="rental">Rental questionnaire</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="buyerEmail" className="mb-2 block text-sm font-medium">
-                  Buyer email
-                </label>
-                <Input id="buyerEmail" name="buyerEmail" type="email" />
-              </div>
-              <div>
-                <label htmlFor="buyerPhone" className="mb-2 block text-sm font-medium">
-                  Buyer phone
-                </label>
-                <Input id="buyerPhone" name="buyerPhone" type="tel" />
-              </div>
-            </div>
+          <form action={createInviteAction} className="mt-6 space-y-4">
             <p className="text-sm leading-7 text-[color:var(--muted-ink)]">
-              Choose the questionnaire first, then add at least one contact method. The lead detail
-              page will generate the shareable intake link automatically.
+              The lead will add their name, contact details, and whether they are buying or renting
+              after opening the link. You only need to generate and share the invite.
             </p>
             <Button type="submit" className="w-full">
-              Create lead
+              Generate invite link
             </Button>
           </form>
+          <GeneratedLinkPanel
+            inviteUrl={
+              latestInvite ? buildAppUrl(`/intake/${latestInvite.token}`) : undefined
+            }
+            invitePath={latestInvite ? `/intake/${latestInvite.token}` : undefined}
+            status={latestInvite?.status}
+          />
         </Card>
       </section>
       <section className="mt-8">
@@ -134,7 +118,7 @@ export default async function DashboardPage() {
           <div>
             <p className="font-display text-3xl text-[color:var(--ink)]">Recent leads</p>
             <p className="mt-2 text-sm text-[color:var(--muted-ink)]">
-              The latest buyers to enter your qualification pipeline.
+              Completed intakes move here once they become real leads in your pipeline.
             </p>
           </div>
           <Link href="/leads">
