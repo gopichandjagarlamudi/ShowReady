@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { trackServerEvent } from "@/lib/analytics";
+import { buildAuthRedirectPath, sanitizeAuthNextPath } from "@/lib/auth-url";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureAgentScaffold } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -7,11 +8,18 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
-  const next = requestUrl.searchParams.get("next") ?? "/dashboard"
+  const next = sanitizeAuthNextPath(requestUrl.searchParams.get("next"))
+  const vercelShareToken = requestUrl.searchParams.get("_vercel_share")
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/login?error=Unable to verify your sign in link.", request.url)
+      new URL(
+        buildAuthRedirectPath("/login", {
+          error: "Unable to verify your sign in link.",
+          vercelShareToken
+        }),
+        request.url
+      )
     )
   }
 
@@ -20,7 +28,13 @@ export async function GET(request: Request) {
 
   if (error) {
     return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(error.message)}`, request.url)
+      new URL(
+        buildAuthRedirectPath("/login", {
+          error: error.message,
+          vercelShareToken
+        }),
+        request.url
+      )
     )
   }
 
@@ -30,7 +44,13 @@ export async function GET(request: Request) {
 
   if (!user) {
     return NextResponse.redirect(
-      new URL("/login?error=No active user was returned from Supabase.", request.url)
+      new URL(
+        buildAuthRedirectPath("/login", {
+          error: "No active user was returned from Supabase.",
+          vercelShareToken
+        }),
+        request.url
+      )
     )
   }
 
@@ -38,5 +58,12 @@ export async function GET(request: Request) {
   await ensureAgentScaffold(admin, user)
   await trackServerEvent("auth.login", { method: "google" }, user.id)
 
-  return NextResponse.redirect(new URL(next, request.url))
+  return NextResponse.redirect(
+    new URL(
+      buildAuthRedirectPath(next, {
+        vercelShareToken
+      }),
+      request.url
+    )
+  )
 }

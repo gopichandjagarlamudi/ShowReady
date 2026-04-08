@@ -37,6 +37,8 @@ export const notificationPreferenceEnum = pgEnum("notification_preference", [
   "email_and_push"
 ]);
 
+export const intakeTypeEnum = pgEnum("intake_type", ["sale", "rental"]);
+
 const auth = pgSchema("auth");
 
 export const authUsers = auth.table("users", {
@@ -68,13 +70,18 @@ export const questionTemplates = pgTable(
       .references(() => agents.id, {
         onDelete: "cascade"
       }),
+    intakeType: intakeTypeEnum("intake_type").notNull(),
     name: text("name").notNull(),
     introHeadline: text("intro_headline").notNull(),
     introBody: text("intro_body").notNull(),
     customQuestions: jsonb("custom_questions").notNull()
   },
   (table) => ({
-    agentIdIdx: index("question_templates_agent_id_idx").on(table.agentId)
+    agentIdIdx: index("question_templates_agent_id_idx").on(table.agentId),
+    agentTypeUnique: uniqueIndex("question_templates_agent_id_intake_type_unique").on(
+      table.agentId,
+      table.intakeType
+    )
   })
 );
 
@@ -124,6 +131,7 @@ export const leads = pgTable(
     buyerName: text("buyer_name").notNull(),
     buyerPhone: text("buyer_phone"),
     buyerEmail: text("buyer_email"),
+    intakeType: intakeTypeEnum("intake_type").default("sale").notNull(),
     token: text("token").notNull().unique(),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }).notNull(),
     status: leadStatusEnum("status").default("pending").notNull(),

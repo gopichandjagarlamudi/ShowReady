@@ -11,6 +11,7 @@ import { getCurrentAgentContext } from "@/lib/session";
 import { overrideLeadScoreAction, updateLeadStageAction } from "@/lib/actions";
 import { getLeadById } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { formatIntakeTypeLabel } from "@/lib/intake-config";
 
 export default async function LeadDetailPage({
   params
@@ -50,6 +51,14 @@ export default async function LeadDetailPage({
           </p>
           <div className="mt-6 rounded-[24px] bg-[color:var(--surface-strong)] p-4">
             <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[color:var(--muted-ink)]">
+              Intake type
+            </p>
+            <p className="mt-2 text-sm text-[color:var(--ink)]">
+              {formatIntakeTypeLabel(lead.intakeType)} questionnaire
+            </p>
+          </div>
+          <div className="mt-4 rounded-[24px] bg-[color:var(--surface-strong)] p-4">
+            <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[color:var(--muted-ink)]">
               Magic link
             </p>
             <p className="mt-2 break-all text-sm text-[color:var(--ink)]">
@@ -75,6 +84,14 @@ export default async function LeadDetailPage({
                 </p>
                 <p className="mt-2 text-sm leading-7 text-[color:var(--ink)]">
                   {lead.buyerEmail ?? lead.buyerPhone ?? "No contact detail yet"}
+                </p>
+              </div>
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-ink)]">
+                  Questionnaire
+                </p>
+                <p className="mt-2 text-sm leading-7 text-[color:var(--ink)]">
+                  {formatIntakeTypeLabel(lead.intakeType)}
                 </p>
               </div>
               <div>

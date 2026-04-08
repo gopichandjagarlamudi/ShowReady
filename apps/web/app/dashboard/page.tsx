@@ -93,6 +93,20 @@ export default async function DashboardPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
+                <label htmlFor="intakeType" className="mb-2 block text-sm font-medium">
+                  Intake type
+                </label>
+                <select
+                  id="intakeType"
+                  name="intakeType"
+                  defaultValue="sale"
+                  className="min-h-11 w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm"
+                >
+                  <option value="sale">Sale questionnaire</option>
+                  <option value="rental">Rental questionnaire</option>
+                </select>
+              </div>
+              <div>
                 <label htmlFor="buyerEmail" className="mb-2 block text-sm font-medium">
                   Buyer email
                 </label>
@@ -106,8 +120,8 @@ export default async function DashboardPage() {
               </div>
             </div>
             <p className="text-sm leading-7 text-[color:var(--muted-ink)]">
-              Add at least one contact method. The lead detail page will generate the shareable
-              intake link automatically.
+              Choose the questionnaire first, then add at least one contact method. The lead detail
+              page will generate the shareable intake link automatically.
             </p>
             <Button type="submit" className="w-full">
               Create lead

@@ -34,6 +34,7 @@ export type LeadStage = "new" | "ready" | "nurture" | "hold" | "closed";
 export type Recommendation = "show" | "nurture" | "hold";
 export type RecommendationTone = Recommendation;
 export type NotificationPreference = "email" | "email_and_push";
+export type IntakeType = "sale" | "rental";
 
 export type IntakeAnswers = {
   timeline: Timeline;
@@ -91,6 +92,7 @@ export type CustomQuestion = {
 
 export type QuestionTemplate = {
   id: string;
+  intakeType: IntakeType;
   name: string;
   introHeadline: string;
   introBody: string;
@@ -121,6 +123,7 @@ export type AgentSettings = {
 export type Lead = {
   id: string;
   agentId: string;
+  intakeType: IntakeType;
   buyerName: string;
   buyerPhone?: string;
   buyerEmail?: string;
@@ -168,7 +171,7 @@ export const CORE_QUESTION_ORDER: CoreQuestionKey[] = [
   "notes"
 ];
 
-export const CORE_QUESTIONS: QuestionDefinition[] = [
+export const SALE_CORE_QUESTIONS: QuestionDefinition[] = [
   {
     key: "timeline",
     label: "What is your timeline to move?",
@@ -257,14 +260,134 @@ export const CORE_QUESTIONS: QuestionDefinition[] = [
   }
 ];
 
+export const RENTAL_CORE_QUESTIONS: QuestionDefinition[] = [
+  {
+    key: "timeline",
+    label: "What is your timeline to move?",
+    helperText: "This helps your agent prioritize the rental search.",
+    type: "single_select",
+    options: [
+      { label: "ASAP", value: "asap" },
+      { label: "1–3 months", value: "1_3mo" },
+      { label: "3–6 months", value: "3_6mo" },
+      { label: "6–12 months", value: "6_12mo" },
+      { label: "Just exploring", value: "exploring" }
+    ]
+  },
+  {
+    key: "financing",
+    label: "Do you have your rental application documents ready?",
+    helperText: "Think proof of income, credit, ID, and references.",
+    type: "single_select",
+    options: [
+      { label: "Yes, fully ready", value: "cash" },
+      { label: "Mostly ready", value: "pre_approved" },
+      { label: "In progress", value: "in_progress" },
+      { label: "Not yet", value: "no" }
+    ]
+  },
+  {
+    key: "budgetBand",
+    label: "What monthly rent range feels comfortable?",
+    type: "single_select",
+    options: [
+      { label: "Under $1,500/mo", value: "under_200k" },
+      { label: "$1,500–$2,000/mo", value: "200k_400k" },
+      { label: "$2,000–$2,500/mo", value: "400k_600k" },
+      { label: "$2,500–$3,500/mo", value: "600k_800k" },
+      { label: "$3,500–$5,000/mo", value: "800k_1m" },
+      { label: "$5,000+/mo", value: "1m_plus" }
+    ]
+  },
+  {
+    key: "exclusiveAgent",
+    label: "Are you already working with another leasing agent?",
+    type: "single_select",
+    options: [
+      { label: "No", value: "no" },
+      { label: "Yes, but not exclusively", value: "yes_not_exclusive" },
+      { label: "Yes, exclusively", value: "yes_exclusive" }
+    ]
+  },
+  {
+    key: "moveReasons",
+    label: "Why are you looking for a rental right now?",
+    type: "multi_select",
+    options: [
+      { label: "Job change", value: "job_change" },
+      { label: "Need more space", value: "upsizing" },
+      { label: "Need less space", value: "downsizing" },
+      { label: "Investment", value: "investment" },
+      { label: "Relocation", value: "relocation" },
+      { label: "Lifestyle", value: "lifestyle" },
+      { label: "Current lease ending", value: "lease_ending" }
+    ]
+  },
+  {
+    key: "priorShowings",
+    label: "Have you toured any rentals in person yet?",
+    type: "single_select",
+    options: [
+      { label: "Yes, many", value: "many" },
+      { label: "A few", value: "few" },
+      { label: "None yet", value: "none" }
+    ]
+  },
+  {
+    key: "offerReadiness",
+    label: "How ready are you to apply for a rental?",
+    helperText: "1 means still researching, 5 means ready to apply right away.",
+    type: "slider",
+    min: 1,
+    max: 5,
+    step: 1
+  },
+  {
+    key: "notes",
+    label: "Anything your agent should know about your rental search?",
+    helperText: "Optional. Keep it short and practical.",
+    type: "textarea"
+  }
+];
+
+export const CORE_QUESTIONS: QuestionDefinition[] = SALE_CORE_QUESTIONS;
+
 export const DEFAULT_TEMPLATE: QuestionTemplate = {
-  id: "default-template",
+  id: "default-sale-template",
+  intakeType: "sale",
   name: "ShowReady Standard",
   introHeadline: "A quick step before your first showing",
   introBody:
     "This takes about two minutes and helps your agent focus on homes that actually fit your timeline and budget.",
   customQuestions: []
 };
+
+export const DEFAULT_RENTAL_TEMPLATE: QuestionTemplate = {
+  id: "default-rental-template",
+  intakeType: "rental",
+  name: "ShowReady Rental",
+  introHeadline: "A quick step before your rental tour",
+  introBody:
+    "This takes about two minutes and helps your agent focus on rentals that fit your timing, budget, and application readiness.",
+  customQuestions: []
+};
+
+export const DEFAULT_TEMPLATES: Record<IntakeType, QuestionTemplate> = {
+  sale: DEFAULT_TEMPLATE,
+  rental: DEFAULT_RENTAL_TEMPLATE
+};
+
+export function getCoreQuestionsForIntakeType(
+  intakeType: IntakeType
+): QuestionDefinition[] {
+  return intakeType === "rental" ? RENTAL_CORE_QUESTIONS : SALE_CORE_QUESTIONS;
+}
+
+export function getDefaultTemplateForIntakeType(
+  intakeType: IntakeType
+): QuestionTemplate {
+  return DEFAULT_TEMPLATES[intakeType];
+}
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "layout-dashboard" },

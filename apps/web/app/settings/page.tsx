@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getCurrentAgentContext } from "@/lib/session";
 import { saveSettingsAction } from "@/lib/actions";
+import { formatIntakeTypeLabel, resolveTemplateForIntakeType } from "@/lib/intake-config";
 
 export default async function SettingsPage({
   searchParams
@@ -14,13 +16,15 @@ export default async function SettingsPage({
 }) {
   const params = await searchParams;
   const onboardingMode = params.onboarding === "1";
+  const activeIntakeType = params.intakeType === "rental" ? "rental" : "sale";
   const context = await getCurrentAgentContext();
 
   if (!context) {
     redirect("/login");
   }
 
-  const customQuestions = context.template.customQuestions;
+  const template = resolveTemplateForIntakeType(activeIntakeType, context.templates);
+  const customQuestions = template.customQuestions;
 
   return (
     <AppShell
@@ -107,18 +111,42 @@ export default async function SettingsPage({
           </Card>
           <Card className="p-6">
             <p className="font-display text-3xl text-[color:var(--ink)]">Intake experience</p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {(["sale", "rental"] as const).map((intakeType) => {
+                const isActive = intakeType === activeIntakeType;
+
+                return (
+                  <Link
+                    key={intakeType}
+                    href={
+                      onboardingMode
+                        ? `/settings?onboarding=1&intakeType=${intakeType}`
+                        : `/settings?intakeType=${intakeType}`
+                    }
+                    className={`rounded-full border px-4 py-2 text-sm transition ${
+                      isActive
+                        ? "border-transparent bg-[color:var(--brand)] text-white"
+                        : "border-[color:var(--border)] bg-white text-[color:var(--ink)]"
+                    }`}
+                  >
+                    {formatIntakeTypeLabel(intakeType)} template
+                  </Link>
+                );
+              })}
+            </div>
             <div className="mt-5 space-y-4">
+              <input type="hidden" name="intakeType" value={activeIntakeType} />
               <div>
                 <label htmlFor="introHeadline" className="mb-2 block text-sm font-medium">
                   Intro headline
                 </label>
-                <Input id="introHeadline" name="introHeadline" defaultValue={context.template.introHeadline} required />
+                <Input id="introHeadline" name="introHeadline" defaultValue={template.introHeadline} required />
               </div>
               <div>
                 <label htmlFor="introBody" className="mb-2 block text-sm font-medium">
                   Intro body
                 </label>
-                <Textarea id="introBody" name="introBody" defaultValue={context.template.introBody} required />
+                <Textarea id="introBody" name="introBody" defaultValue={template.introBody} required />
               </div>
             </div>
           </Card>
@@ -193,12 +221,12 @@ export default async function SettingsPage({
               <p className="font-mono text-xs uppercase tracking-[0.28em] text-white/70">
                 {context.settings.brandName}
               </p>
-              <p className="mt-4 font-display text-4xl">{context.template.introHeadline}</p>
-              <p className="mt-4 text-white/80">{context.template.introBody}</p>
+              <p className="mt-4 font-display text-4xl">{template.introHeadline}</p>
+              <p className="mt-4 text-white/80">{template.introBody}</p>
             </div>
             <p className="mt-6 text-sm leading-7 text-[color:var(--muted-ink)]">
-              The buyer intake is always one question per screen, fully mobile-first, and keeps the
-              scoring questions locked.
+              The {activeIntakeType} intake is always one question per screen, fully mobile-first,
+              and keeps the scoring questions locked.
             </p>
             <Button type="submit" className="mt-6 w-full">
               {onboardingMode ? "Complete setup" : "Save changes"}

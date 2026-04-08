@@ -159,6 +159,7 @@ export async function saveSettingsAction(formData: FormData) {
     notificationPreference:
       (getString(formData, "notificationPreference") as "email" | "email_and_push") ||
       "email",
+    intakeType: (getString(formData, "intakeType") as "sale" | "rental") || "sale",
     introHeadline: getString(formData, "introHeadline"),
     introBody: getString(formData, "introBody"),
     customQuestions: parseCustomQuestions(formData)
@@ -180,6 +181,7 @@ export async function createLeadAction(formData: FormData) {
 
   try {
     const lead = await createLead(supabase, agentId, {
+      intakeType: (getString(formData, "intakeType") as "sale" | "rental") || "sale",
       buyerName: getString(formData, "buyerName"),
       buyerPhone: getString(formData, "buyerPhone"),
       buyerEmail: getString(formData, "buyerEmail")

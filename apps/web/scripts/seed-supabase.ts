@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js"
 import { scoreLead } from "@showready/scoring"
-import type { IntakeAnswers } from "@showready/types"
+import {
+  getDefaultTemplateForIntakeType,
+  type IntakeAnswers,
+  type IntakeType
+} from "@showready/types"
 import type { Database } from "../lib/supabase/database"
 
 const DEMO_EMAIL = "demo@showready.local"
@@ -14,6 +18,7 @@ const sampleLeadSpecs: Array<{
   buyerName: string
   buyerEmail: string
   buyerPhone?: string
+  intakeType: IntakeType
   answers: IntakeAnswers
 }> = [
   {
@@ -23,6 +28,7 @@ const sampleLeadSpecs: Array<{
     buyerName: "Sofia Chen",
     buyerEmail: "sofia.chen@example.com",
     buyerPhone: "+1 416 555 0101",
+    intakeType: "sale",
     answers: {
       timeline: "asap",
       financing: "cash",
@@ -41,6 +47,7 @@ const sampleLeadSpecs: Array<{
     buyerName: "Marcus Hall",
     buyerEmail: "marcus.hall@example.com",
     buyerPhone: "+1 647 555 0199",
+    intakeType: "rental",
     answers: {
       timeline: "3_6mo",
       financing: "in_progress",
@@ -58,6 +65,7 @@ const sampleLeadSpecs: Array<{
     scoreId: "c8526f41-53d7-4b4e-8689-b337322dbb09",
     buyerName: "Nina Patel",
     buyerEmail: "nina.patel@example.com",
+    intakeType: "sale",
     answers: {
       timeline: "exploring",
       financing: "no",
@@ -139,18 +147,19 @@ async function seedAgentScaffold(
   client: ReturnType<typeof createClient<Database>>,
   agentId: string
 ) {
-  const { data: existingTemplate, error: templateLookupError } = await client
+  const { data: existingTemplates, error: templateLookupError } = await client
     .from("question_templates")
-    .select("id")
+    .select("id, intake_type")
     .eq("agent_id", agentId)
-    .limit(1)
-    .maybeSingle()
 
   if (templateLookupError) {
     throw templateLookupError
   }
 
-  const templateId = existingTemplate?.id ?? "demo-template"
+  const saleTemplateId =
+    existingTemplates?.find((entry) => entry.intake_type === "sale")?.id ?? "demo-sale-template"
+  const rentalTemplateId =
+    existingTemplates?.find((entry) => entry.intake_type === "rental")?.id ?? "demo-rental-template"
 
   const { error: agentError } = await client.from("agents").upsert(
     {
@@ -170,25 +179,46 @@ async function seedAgentScaffold(
     throw agentError
   }
 
+  const saleTemplate = getDefaultTemplateForIntakeType("sale")
+  const rentalTemplate = getDefaultTemplateForIntakeType("rental")
+
   const { error: templateError } = await client.from("question_templates").upsert(
+    [
+      {
+        id: saleTemplateId,
+        agent_id: agentId,
+        intake_type: "sale",
+        name: saleTemplate.name,
+        intro_headline: saleTemplate.introHeadline,
+        intro_body: saleTemplate.introBody,
+        custom_questions: [
+          {
+            id: "custom-1",
+            label: "What neighborhoods are you focused on?",
+            type: "text",
+            required: false
+          }
+        ]
+      },
+      {
+        id: rentalTemplateId,
+        agent_id: agentId,
+        intake_type: "rental",
+        name: rentalTemplate.name,
+        intro_headline: rentalTemplate.introHeadline,
+        intro_body: rentalTemplate.introBody,
+        custom_questions: [
+          {
+            id: "custom-1",
+            label: "Which neighborhoods or buildings are at the top of your list?",
+            type: "text",
+            required: false
+          }
+        ]
+      }
+    ],
     {
-      id: templateId,
-      agent_id: agentId,
-      name: "ShowReady Standard",
-      intro_headline: "A quick step before your first showing",
-      intro_body:
-        "This takes about two minutes and helps your agent focus on homes that actually fit your timeline and budget.",
-      custom_questions: [
-        {
-          id: "custom-1",
-          label: "What neighborhoods are you focused on?",
-          type: "text",
-          required: false
-        }
-      ]
-    },
-    {
-      onConflict: "id"
+      onConflict: "agent_id,intake_type"
     }
   )
 
@@ -203,7 +233,7 @@ async function seedAgentScaffold(
       brand_color: "#0F766E",
       accent_color: "#A16207",
       show_threshold: 8,
-      question_template_id: templateId,
+      question_template_id: saleTemplateId,
       notification_preference: "email"
     },
     {
@@ -231,6 +261,7 @@ async function seedLeadData(
         buyer_name: spec.buyerName,
         buyer_email: spec.buyerEmail,
         buyer_phone: spec.buyerPhone ?? null,
+        intake_type: spec.intakeType,
         token: spec.token,
         token_expires_at: "2099-01-01T00:00:00.000Z",
         status: "submitted",

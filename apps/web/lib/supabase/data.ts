@@ -1,14 +1,37 @@
 import "server-only"
 
 import { randomUUID } from "node:crypto"
-import { DEFAULT_TEMPLATE, CORE_QUESTIONS, type AgentProfile, type AgentSettings, type CustomQuestion, type IntakeAnswers, type Lead, type LeadStage, type QuestionTemplate, type Recommendation, type ScoreOverride, type ScoreBreakdown, type MoveReason } from "@showready/types"
+import {
+  CORE_QUESTION_ORDER,
+  getDefaultTemplateForIntakeType,
+  type AgentProfile,
+  type AgentSettings,
+  type CustomQuestion,
+  type IntakeAnswers,
+  type IntakeType,
+  type Lead,
+  type LeadStage,
+  type QuestionTemplate,
+  type Recommendation,
+  type ScoreOverride,
+  type ScoreBreakdown
+} from "@showready/types"
 import { scoreLead } from "@showready/scoring"
 import type { SupabaseClient, User } from "@supabase/supabase-js"
 import type { Database, Json } from "./database"
+import {
+  assertLeadIntakeMutable,
+  assertRequiredAnswerValue
+} from "@/lib/intake-guards"
+import {
+  getCoreQuestionsForIntakeType,
+  resolveTemplateForIntakeType
+} from "@/lib/intake-config"
 
 type AppSupabaseClient = SupabaseClient<Database>
 
 type OnboardingInput = {
+  intakeType: IntakeType
   fullName: string
   brokerage?: string
   licenseNumber?: string
@@ -23,6 +46,7 @@ type OnboardingInput = {
 }
 
 type CreateLeadInput = {
+  intakeType: IntakeType
   buyerName: string
   buyerPhone?: string
   buyerEmail?: string
@@ -38,7 +62,7 @@ function nowIso() {
 }
 
 function isCoreQuestionKey(key: string) {
-  return CORE_QUESTIONS.some((question) => question.key === key)
+  return CORE_QUESTION_ORDER.includes(key as (typeof CORE_QUESTION_ORDER)[number])
 }
 
 function requireData<T>(value: T | null, message: string): T {
@@ -70,6 +94,10 @@ function defaultSettings(agentId: string, templateId: string): Database["public"
     notification_preference: "email",
     question_template_id: templateId
   }
+}
+
+function normalizeIntakeType(value: string | null | undefined): IntakeType {
+  return value === "rental" ? "rental" : "sale"
 }
 
 function recommendationToStage(recommendation: Recommendation): LeadStage {
@@ -173,6 +201,7 @@ function mapQuestionTemplate(
 ): QuestionTemplate {
   return {
     id: row.id,
+    intakeType: normalizeIntakeType(row.intake_type),
     name: row.name,
     introHeadline: row.intro_headline,
     introBody: row.intro_body,
@@ -194,6 +223,7 @@ function mapLead(
   return {
     id: row.id,
     agentId: row.agent_id,
+    intakeType: normalizeIntakeType(row.intake_type),
     buyerName: row.buyer_name,
     buyerPhone: row.buyer_phone ?? undefined,
     buyerEmail: row.buyer_email ?? undefined,
@@ -215,12 +245,24 @@ function mapLead(
 }
 
 function assertCompleteAnswers(
-  answers: Partial<IntakeAnswers>
+  answers: Partial<IntakeAnswers>,
+  intakeType: IntakeType
 ): asserts answers is IntakeAnswers {
-  const missing = CORE_QUESTIONS.filter(
-    (question) =>
-      question.key !== "notes" && !answers[question.key as keyof IntakeAnswers]
-  ).map((question) => question.label)
+  const missing = getCoreQuestionsForIntakeType(intakeType).filter((question) => {
+    if (question.key === "notes") {
+      return false
+    }
+
+    try {
+      assertRequiredAnswerValue(
+        question.label,
+        answers[question.key as keyof IntakeAnswers]
+      )
+      return false
+    } catch {
+      return true
+    }
+  }).map((question) => question.label)
 
   if (missing.length > 0) {
     throw new Error(`Missing answers for: ${missing.join(", ")}`)
@@ -241,7 +283,6 @@ export async function ensureAgentScaffold(
     return
   }
 
-  const templateId = randomUUID()
   const fullName = getDisplayName(user)
 
   const { error: agentError } = await adminClient.from("agents").upsert(
@@ -259,21 +300,28 @@ export async function ensureAgentScaffold(
     throw agentError
   }
 
+  const templates = (["sale", "rental"] as const).map((intakeType) => {
+    const template = getDefaultTemplateForIntakeType(intakeType)
+
+    return {
+      id: randomUUID(),
+      agent_id: user.id,
+      intake_type: intakeType,
+      name: template.name,
+      intro_headline: template.introHeadline,
+      intro_body: template.introBody,
+      custom_questions: template.customQuestions as unknown as Json
+    }
+  })
+
+  const saleTemplateId =
+    templates.find((entry) => entry.intake_type === "sale")?.id ?? randomUUID()
+
   const { error: templateError } = await adminClient
     .from("question_templates")
-    .upsert(
-      {
-        id: templateId,
-        agent_id: user.id,
-        name: DEFAULT_TEMPLATE.name,
-        intro_headline: DEFAULT_TEMPLATE.introHeadline,
-        intro_body: DEFAULT_TEMPLATE.introBody,
-        custom_questions: DEFAULT_TEMPLATE.customQuestions as unknown as Json
-      },
-      {
-        onConflict: "id"
-      }
-    )
+    .upsert(templates, {
+      onConflict: "agent_id,intake_type"
+    })
 
   if (templateError) {
     throw templateError
@@ -283,7 +331,7 @@ export async function ensureAgentScaffold(
     .from("agent_settings")
     .insert({
       id: randomUUID(),
-      ...defaultSettings(user.id, templateId)
+      ...defaultSettings(user.id, saleTemplateId)
     })
 
   if (
@@ -320,24 +368,29 @@ export async function getAgentContext(
     return null
   }
 
-  const { data: template, error: templateError } = await client
+  const { data: templates, error: templateError } = await client
     .from("question_templates")
     .select("*")
-    .eq("id", settings.question_template_id)
-    .maybeSingle()
+    .eq("agent_id", agentId)
 
   if (templateError) {
     throw templateError
   }
 
-  if (!template) {
+  if (!templates || templates.length === 0) {
     return null
   }
+
+  const mappedTemplates = templates.map((entry) => mapQuestionTemplate(entry))
+  const selectedTemplate =
+    mappedTemplates.find((entry) => entry.id === settings.question_template_id) ??
+    resolveTemplateForIntakeType("sale", mappedTemplates)
 
   return {
     agent: mapAgentProfile(agent),
     settings: mapAgentSettings(settings),
-    template: mapQuestionTemplate(template)
+    template: selectedTemplate,
+    templates: mappedTemplates
   }
 }
 
@@ -420,6 +473,7 @@ export async function createLead(
       buyer_name: input.buyerName,
       buyer_email: input.buyerEmail || null,
       buyer_phone: input.buyerPhone || null,
+      intake_type: input.intakeType,
       token: randomUUID(),
       token_expires_at: new Date(
         Date.now() + 1000 * 60 * 60 * 24 * 7
@@ -447,17 +501,32 @@ export async function completeOnboarding(
     throw new Error("Phase 1 only allows up to two custom context questions.")
   }
 
-  const { data: settings, error: settingsError } = await client
-    .from("agent_settings")
-    .select("*")
-    .eq("agent_id", agentId)
-    .single()
+  const [{ data: settings, error: settingsError }, { data: templates, error: templateLookupError }] =
+    await Promise.all([
+      client
+        .from("agent_settings")
+        .select("*")
+        .eq("agent_id", agentId)
+        .single(),
+      client
+        .from("question_templates")
+        .select("*")
+        .eq("agent_id", agentId)
+    ])
 
   if (settingsError) {
     throw settingsError
   }
 
+  if (templateLookupError) {
+    throw templateLookupError
+  }
+
   const timestamp = nowIso()
+  const template = resolveTemplateForIntakeType(
+    input.intakeType,
+    (templates ?? []).map((entry) => mapQuestionTemplate(entry))
+  )
 
   const { error: agentError } = await client
     .from("agents")
@@ -495,7 +564,7 @@ export async function completeOnboarding(
       intro_body: input.introBody,
       custom_questions: input.customQuestions as unknown as Json
     })
-    .eq("id", settings.question_template_id)
+    .eq("id", template.id)
 
   if (templateError) {
     throw templateError
@@ -712,10 +781,16 @@ export async function getLeadIntakeContext(
     return null
   }
 
-  const [{ data: agent, error: agentError }, { data: settings, error: settingsError }, { data: answerRows, error: answerError }] =
+  const [
+    { data: agent, error: agentError },
+    { data: settings, error: settingsError },
+    { data: templates, error: templateError },
+    { data: answerRows, error: answerError }
+  ] =
     await Promise.all([
       client.from("agents").select("*").eq("id", lead.agent_id).single(),
       client.from("agent_settings").select("*").eq("agent_id", lead.agent_id).single(),
+      client.from("question_templates").select("*").eq("agent_id", lead.agent_id),
       client
         .from("lead_answers")
         .select("*")
@@ -731,18 +806,12 @@ export async function getLeadIntakeContext(
     throw settingsError
   }
 
-  if (answerError) {
-    throw answerError
-  }
-
-  const { data: template, error: templateError } = await client
-    .from("question_templates")
-    .select("*")
-    .eq("id", settings.question_template_id)
-    .single()
-
   if (templateError) {
     throw templateError
+  }
+
+  if (answerError) {
+    throw answerError
   }
 
   const latestScore = await client
@@ -760,9 +829,12 @@ export async function getLeadIntakeContext(
     lead: mapLead(lead, answerRows ?? [], latestScore.data?.[0]),
     agent: mapAgentProfile(agent),
     settings: mapAgentSettings(settings),
-    template: mapQuestionTemplate(template),
+    template: resolveTemplateForIntakeType(
+      normalizeIntakeType(lead.intake_type),
+      (templates ?? []).map((entry) => mapQuestionTemplate(entry))
+    ),
     isExpired: new Date(lead.token_expires_at).getTime() < Date.now(),
-    questions: CORE_QUESTIONS
+    questions: getCoreQuestionsForIntakeType(normalizeIntakeType(lead.intake_type))
   }
 }
 
@@ -774,7 +846,7 @@ export async function autosaveLeadAnswer(
 ) {
   const { data: lead, error: leadError } = await client
     .from("leads")
-    .select("id, token_expires_at")
+    .select("id, status, token_expires_at")
     .eq("token", token)
     .maybeSingle()
 
@@ -785,6 +857,8 @@ export async function autosaveLeadAnswer(
   if (!lead) {
     throw new Error("Lead not found.")
   }
+
+  assertLeadIntakeMutable(lead.status)
 
   if (new Date(lead.token_expires_at).getTime() < Date.now()) {
     throw new Error("This intake link has expired.")
@@ -834,7 +908,8 @@ export async function submitLead(
     throw new Error("This intake link has expired.")
   }
 
-  assertCompleteAnswers(input.answers)
+  assertLeadIntakeMutable(context.lead.status)
+  assertCompleteAnswers(input.answers, context.lead.intakeType)
   const scored = scoreLead(
     input.answers,
     context.settings.showThreshold

@@ -4,6 +4,7 @@ create type "lead_status" as enum ('pending', 'submitted', 'archived');
 create type "lead_stage" as enum ('new', 'ready', 'nurture', 'hold', 'closed');
 create type "recommendation" as enum ('show', 'nurture', 'hold');
 create type "notification_preference" as enum ('email', 'email_and_push');
+create type "intake_type" as enum ('sale', 'rental');
 
 create table "agents" (
   "id" uuid primary key not null references auth.users(id) on delete cascade,
@@ -21,6 +22,7 @@ create table "agents" (
 create table "question_templates" (
   "id" text primary key not null,
   "agent_id" uuid not null references public.agents(id) on delete cascade,
+  "intake_type" "intake_type" not null,
   "name" text not null,
   "intro_headline" text not null,
   "intro_body" text not null,
@@ -45,6 +47,7 @@ create table "leads" (
   "buyer_name" text not null,
   "buyer_phone" text,
   "buyer_email" text,
+  "intake_type" "intake_type" default 'sale' not null,
   "token" text not null,
   "token_expires_at" timestamp with time zone not null,
   "status" "lead_status" default 'pending' not null,
@@ -80,6 +83,7 @@ create table "lead_scores" (
 );
 
 create index "question_templates_agent_id_idx" on "question_templates" ("agent_id");
+create unique index "question_templates_agent_id_intake_type_unique" on "question_templates" ("agent_id", "intake_type");
 create index "agent_settings_agent_id_idx" on "agent_settings" ("agent_id");
 create index "agent_settings_question_template_id_idx" on "agent_settings" ("question_template_id");
 create index "leads_agent_id_idx" on "leads" ("agent_id");
@@ -116,7 +120,7 @@ security definer
 set search_path = public
 as $$
 declare
-  template_id text;
+  sale_template_id text;
   display_name text;
 begin
   display_name := coalesce(
@@ -140,31 +144,54 @@ begin
   set email = excluded.email;
 
   select id
-  into template_id
+  into sale_template_id
   from public.question_templates
   where agent_id = new.id
+    and intake_type = 'sale'
   limit 1;
 
-  if template_id is null then
-    template_id := gen_random_uuid()::text;
+  if sale_template_id is null then
+    sale_template_id := gen_random_uuid()::text;
 
     insert into public.question_templates (
       id,
       agent_id,
+      intake_type,
       name,
       intro_headline,
       intro_body,
       custom_questions
     )
     values (
-      template_id,
+      sale_template_id,
       new.id,
+      'sale',
       'ShowReady Standard',
       'A quick step before your first showing',
       'This takes about two minutes and helps your agent focus on homes that actually fit your timeline and budget.',
       '[]'::jsonb
     );
   end if;
+
+  insert into public.question_templates (
+    id,
+    agent_id,
+    intake_type,
+    name,
+    intro_headline,
+    intro_body,
+    custom_questions
+  )
+  values (
+    gen_random_uuid()::text,
+    new.id,
+    'rental',
+    'ShowReady Rental',
+    'A quick step before your rental tour',
+    'This takes about two minutes and helps your agent focus on rentals that fit your timing, budget, and application readiness.',
+    '[]'::jsonb
+  )
+  on conflict ("agent_id", "intake_type") do nothing;
 
   insert into public.agent_settings (
     agent_id,
@@ -181,7 +208,7 @@ begin
     '#0F766E',
     '#A16207',
     8.00,
-    template_id,
+    sale_template_id,
     'email'
   )
   on conflict (agent_id) do nothing;

@@ -24,11 +24,15 @@ export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServerClient()
     const payload = (await request.json()) as {
+      intakeType?: "sale" | "rental";
       buyerName: string;
       buyerPhone?: string;
       buyerEmail?: string;
     };
-    const lead = await createLead(supabase, agentId, payload);
+    const lead = await createLead(supabase, agentId, {
+      ...payload,
+      intakeType: payload.intakeType ?? "sale"
+    });
     return NextResponse.json({ lead }, { status: 201 });
   } catch (error) {
     captureServerError(error, "api.leads.create");

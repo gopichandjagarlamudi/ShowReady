@@ -6,6 +6,7 @@ import {
   type AgentSettings,
   type CustomQuestion,
   type IntakeAnswers,
+  type IntakeType,
   type Lead,
   type LeadStage,
   type MoveReason,
@@ -45,6 +46,7 @@ type RegisterInput = {
 };
 
 type OnboardingInput = {
+  intakeType?: IntakeType;
   fullName: string;
   brokerage?: string;
   licenseNumber?: string;
@@ -59,6 +61,7 @@ type OnboardingInput = {
 };
 
 type CreateLeadInput = {
+  intakeType?: IntakeType;
   buyerName: string;
   buyerPhone?: string;
   buyerEmail?: string;
@@ -120,6 +123,7 @@ function createScoredLead(
   return {
     id,
     agentId,
+    intakeType: input.intakeType ?? "sale",
     buyerName: input.buyerName,
     buyerEmail: input.buyerEmail,
     buyerPhone: input.buyerPhone,
@@ -401,6 +405,7 @@ export async function createLead(agentId: string, input: CreateLeadInput) {
     const lead: Lead = {
       id: randomUUID(),
       agentId,
+      intakeType: input.intakeType ?? "sale",
       buyerName: input.buyerName,
       buyerPhone: input.buyerPhone,
       buyerEmail: input.buyerEmail,

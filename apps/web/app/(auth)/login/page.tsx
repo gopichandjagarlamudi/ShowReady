@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { loginAction, signInWithGoogleAction } from "@/lib/actions";
+import { buildAuthActionPath, buildAuthRedirectPath } from "@/lib/auth-url";
 
 export default async function LoginPage({
   searchParams
@@ -12,30 +12,51 @@ export default async function LoginPage({
   const params = await searchParams;
   const error = typeof params.error === "string" ? params.error : undefined;
   const message = typeof params.message === "string" ? params.message : undefined;
+  const vercelShareToken =
+    typeof params._vercel_share === "string" ? params._vercel_share : undefined
+  const loginAction = buildAuthActionPath("/auth/login", vercelShareToken)
+  const googleAction = buildAuthActionPath("/auth/google", vercelShareToken)
+  const registerHref = buildAuthRedirectPath("/register", {
+    vercelShareToken
+  })
 
   return (
     <main className="grid min-h-dvh place-items-center px-5 py-10">
-      <Card className="w-full max-w-xl p-8">
-        <p className="font-mono text-xs uppercase tracking-[0.28em] text-[color:var(--muted-ink)]">
+      <Card className="w-full max-w-lg p-7 sm:p-8">
+        <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[color:var(--muted-ink)]">
           Sign in
         </p>
-        <h1 className="mt-4 font-display text-4xl text-[color:var(--ink)]">
-          Back to your lead desk
+        <h1 className="mt-3 font-display text-[2rem] leading-tight text-[color:var(--ink)] sm:text-4xl">
+          Sign in to ShowReady
         </h1>
-        <p className="mt-3 text-[color:var(--muted-ink)]">
-          Use the demo account `demo@showready.local` / `demo12345` or create your own.
+        <p className="mt-3 max-w-md text-sm leading-6 text-[color:var(--muted-ink)]">
+          Use your email or Google to continue.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-[color:var(--muted-ink)]">
+          Demo access: <span className="font-mono text-[color:var(--ink)]">demo@showready.local</span>{" "}
+          / <span className="font-mono text-[color:var(--ink)]">demo12345</span>
         </p>
         {error ? (
-          <div className="mt-6 rounded-3xl border border-[color:var(--hold)]/20 bg-[color:var(--hold-soft)] px-4 py-3 text-sm text-[color:var(--hold)]">
+          <div className="mt-5 rounded-[22px] border border-[color:var(--hold)]/15 bg-[color:var(--hold-soft)]/70 px-4 py-3 text-sm leading-6 text-[color:var(--hold)]">
             {error}
           </div>
         ) : null}
         {message ? (
-          <div className="mt-6 rounded-3xl border border-[color:var(--ready)]/20 bg-[color:var(--ready-soft)] px-4 py-3 text-sm text-[color:var(--ready)]">
+          <div className="mt-5 rounded-[22px] border border-[color:var(--ready)]/15 bg-[color:var(--ready-soft)]/70 px-4 py-3 text-sm leading-6 text-[color:var(--ready)]">
             {message}
           </div>
         ) : null}
-        <form action={loginAction} className="mt-8 space-y-5">
+        <form action={googleAction} method="post" className="mt-6">
+          <Button type="submit" variant="secondary" className="w-full">
+            Continue with Google
+          </Button>
+        </form>
+        <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-ink)]">
+          <div className="h-px flex-1 bg-[color:var(--border)]" />
+          <span>Or continue with email</span>
+          <div className="h-px flex-1 bg-[color:var(--border)]" />
+        </div>
+        <form action={loginAction} method="post" className="space-y-4">
           <div>
             <label htmlFor="email" className="mb-2 block text-sm font-medium">
               Email
@@ -52,14 +73,9 @@ export default async function LoginPage({
             Sign in
           </Button>
         </form>
-        <form action={signInWithGoogleAction} className="mt-4">
-          <Button type="submit" variant="secondary" className="w-full">
-            Continue with Google
-          </Button>
-        </form>
-        <p className="mt-6 text-sm text-[color:var(--muted-ink)]">
+        <p className="mt-5 text-sm text-[color:var(--muted-ink)]">
           Need a workspace?{" "}
-          <Link href="/register" className="font-medium text-[color:var(--brand)]">
+          <Link href={registerHref} className="font-medium text-[color:var(--brand)]">
             Create one
           </Link>
         </p>

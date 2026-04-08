@@ -63,6 +63,7 @@ export type Database = {
         Row: {
           id: string
           agent_id: string
+          intake_type: "sale" | "rental"
           name: string
           intro_headline: string
           intro_body: string
@@ -71,6 +72,7 @@ export type Database = {
         Insert: {
           id: string
           agent_id: string
+          intake_type: "sale" | "rental"
           name: string
           intro_headline: string
           intro_body: string
@@ -86,6 +88,7 @@ export type Database = {
           buyer_name: string
           buyer_phone: string | null
           buyer_email: string | null
+          intake_type: "sale" | "rental"
           token: string
           token_expires_at: string
           status: "pending" | "submitted" | "archived"
@@ -103,6 +106,7 @@ export type Database = {
           buyer_name: string
           buyer_phone?: string | null
           buyer_email?: string | null
+          intake_type?: "sale" | "rental"
           token: string
           token_expires_at: string
           status?: "pending" | "submitted" | "archived"
@@ -171,6 +175,7 @@ export type Database = {
       lead_stage: "new" | "ready" | "nurture" | "hold" | "closed"
       recommendation: "show" | "nurture" | "hold"
       notification_preference: "email" | "email_and_push"
+      intake_type: "sale" | "rental"
     }
     CompositeTypes: Record<string, never>
   }
