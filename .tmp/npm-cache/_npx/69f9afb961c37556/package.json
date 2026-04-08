@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "vercel": "^50.42.0"
+  },
+  "_npx": {
+    "packages": [
+      "vercel"
+    ]
+  }
+}

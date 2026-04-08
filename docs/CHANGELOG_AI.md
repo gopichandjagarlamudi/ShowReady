@@ -1,6 +1,9 @@
 # AI Changelog
 
 ## 2026-04-08
+- Debugged the shared auth onboarding failure affecting both email/password signup and Google OAuth: direct Supabase Admin `createUser()` calls reproduced `AuthApiError: Database error creating new user`, and live DB inspection showed the connected project's `public.handle_new_user()` trigger function had drifted to an older version that inserted `question_templates` rows without the now-required `intake_type` column.
+- Added `packages/db/migrations/0003_repair_auth_user_scaffold.sql` to reapply the current auth-trigger scaffold on existing Supabase projects, and added `packages/db/tests/repair-auth-trigger.test.ts` so the repair migration is regression-tested in the repo.
+- Verified the repair with `corepack pnpm --filter @showready/db test -- tests/repair-auth-trigger.test.ts`, `psql "$DATABASE_URL" -f packages/db/migrations/0003_repair_auth_user_scaffold.sql`, and a repeat admin-side `createUser()` repro that now succeeds against the connected Supabase project.
 - Fixed the failed Vercel production deployment by removing the stale `packages/db/src/mock-store.ts` export from `@showready/db`; Vercel was running `turbo run build`, which still compiled that dead legacy file and failed on removed `@showready/types` exports before `@showready/web` could finish.
 - Verified the build fix with `corepack pnpm --filter @showready/db build`, `corepack pnpm typecheck`, and `corepack pnpm --filter @showready/web build`, matching the Vercel failure path that had been reported by `vercel inspect --logs`.
 - Fixed the lead detail stage-action list by adding `apps/web/lib/lead-stage.ts`, updating `apps/web/app/leads/[leadId]/page.tsx` to derive move targets from the current `pipelineStage`, excluding the current stage from the rendered buttons, keeping `new` out of the manual destination list, and allowing `closed` leads to reopen into active stages.
