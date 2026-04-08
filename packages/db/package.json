@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@showready/scoring": "workspace:*",
     "@showready/types": "workspace:*",
     "drizzle-orm": "^0.44.7",
     "zod": "^4.1.12"

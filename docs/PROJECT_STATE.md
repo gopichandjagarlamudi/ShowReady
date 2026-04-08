@@ -4,6 +4,10 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Fixed the Vercel monorepo deployment path for the existing `showready` project by updating the remote project root to `apps/web`, enabling source files outside the root directory, adding a repo `.vercelignore`, and linking the local checkout to that project instead of relying on a temporary standalone bundle.
+- Added explicit monorepo root config in `apps/web/next.config.ts` (`turbopack.root` and `outputFileTracingRoot`) so local and Vercel Next.js 16/Turbopack builds resolve workspace packages from the repo root consistently.
+- Declared the missing `@showready/scoring` workspace dependency in `packages/db/package.json`, refreshed `pnpm-lock.yaml`, and verified the previously failing remote build path now succeeds.
+- Re-ran `corepack pnpm --filter @showready/db build`, `corepack pnpm --filter @showready/web typecheck`, and `corepack pnpm --filter @showready/web build` successfully, then deployed a fresh preview to `https://showready-1u87krowa-jagarlamudigopichand99-4818s-projects.vercel.app`.
 - Cleaned up the public landing page so the homepage now uses a more disciplined four-part flow: compact header, tighter hero, one product preview, one concise proof row, and a short closing CTA instead of multiple overlapping benefit sections.
 - Reduced the landing-page copy and repositioned the messaging toward a calmer product promise, removing the hero demo CTA, the hero metric cards, and duplicate lower-page explanation blocks while keeping the existing editorial-light token system.
 - Updated `apps/web/tests/e2e/smoke.spec.ts` to verify the streamlined landing-page structure and header-to-login navigation, then browser-checked the homepage on local desktop and mobile layouts and re-ran `corepack pnpm --filter @showready/web test:e2e -- tests/e2e/smoke.spec.ts` successfully.
@@ -80,7 +84,7 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 
 ## Risks / Fragile Areas
 - The entire tree is still uncommitted.
-- The current Vercel deployment path depends on a manually staged standalone bundle rather than a repo-native import, so future deployment automation should not assume Vercel is reading directly from the monorepo root yet.
+- The active Vercel project now builds from `apps/web` with source files outside the root enabled; future deployment changes should preserve that monorepo setting or Vercel will regress to failing Next.js/Turbopack root resolution.
 - If the SQL migration drifts from the checked-in file, the app can diverge from the hand-written `Database` type and runtime assumptions.
 - The demo seed and admin-backed flows depend on `SUPABASE_SERVICE_ROLE_KEY`; rotating or removing it locally will break those paths.
 - RLS and auth trigger behavior are now part of the product contract; changes there can silently break onboarding or lead access.

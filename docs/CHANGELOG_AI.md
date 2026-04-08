@@ -1,6 +1,9 @@
 # AI Changelog
 
 ## 2026-04-07
+- Fixed the Vercel monorepo deploy path for the existing `showready` project by setting its root directory to `apps/web`, enabling source files outside the root, adding a repo `.vercelignore`, and linking the checkout to the real project instead of the accidental `web` project.
+- Updated `apps/web/next.config.ts` to set both `turbopack.root` and `outputFileTracingRoot` to the repo root, added the missing `@showready/scoring` workspace dependency to `packages/db/package.json`, refreshed `pnpm-lock.yaml`, and verified the fix with `corepack pnpm --filter @showready/db build`, `corepack pnpm --filter @showready/web typecheck`, and `corepack pnpm --filter @showready/web build`.
+- Deployed a fresh Vercel preview for the current commit to `https://showready-1u87krowa-jagarlamudigopichand99-4818s-projects.vercel.app` after the remote build passed on the corrected monorepo configuration.
 - Reworked `apps/web/app/page.tsx` into a more professional landing page with a tighter hero, no hero demo CTA, one preview card, one concise proof row, and a compact closing CTA while preserving the existing editorial-light design tokens.
 - Updated `apps/web/tests/e2e/smoke.spec.ts` so it now checks the streamlined homepage structure and the landing-page sign-in navigation rather than the separately unstable local dashboard-login browser path, then verified the change with `corepack pnpm --filter @showready/web test:e2e -- tests/e2e/smoke.spec.ts`.
 - Cleaned up `apps/web/app/(auth)/register/page.tsx` and `apps/web/app/(auth)/login/page.tsx` so both auth screens now use shorter, more professional copy, tighter card spacing, quieter status banners, and a shared Google-first plus email-divider action structure.

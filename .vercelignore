@@ -1,0 +1,16 @@
+.git
+.turbo
+.code-review-graph
+.showready-data
+.vercel
+node_modules
+**/node_modules
+.next
+**/.next
+coverage
+dist
+**/dist
+.DS_Store
+.env
+.env.local
+.env.*.local

@@ -110,6 +110,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@showready/scoring':
+        specifier: workspace:*
+        version: link:../scoring
       '@showready/types':
         specifier: workspace:*
         version: link:../types
