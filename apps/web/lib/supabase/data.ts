@@ -15,6 +15,7 @@ import {
   type IntakeType,
   type Invite,
   type Lead,
+  type LeadReview,
   type LeadStage,
   type QuestionTemplate,
   type Recommendation,
@@ -39,6 +40,7 @@ import {
   getRequiredQuestionsForIntent,
   resolveTemplateForIntakeType
 } from "@/lib/intake-config"
+import { getLeadReviewState, getSuggestedStage } from "@/lib/lead-review"
 
 type AppSupabaseClient = SupabaseClient<Database>
 
@@ -105,14 +107,6 @@ function defaultSettings(agentId: string, templateId: string): Database["public"
 
 function normalizeIntakeType(value: string | null | undefined): IntakeType {
   return value === "rental" ? "rental" : "sale"
-}
-
-function recommendationToStage(recommendation: Recommendation): LeadStage {
-  if (recommendation === "show") {
-    return "ready"
-  }
-
-  return recommendation
 }
 
 function recommendationForScore(
@@ -262,6 +256,12 @@ function mapLead(
     scoreRow?.overridden && scoreRow.override_meta
       ? (scoreRow.override_meta as unknown as ScoreOverride)
       : undefined
+  const review = getLeadReviewState({
+    pipelineStage: row.pipeline_stage,
+    recommendation: row.recommendation ?? undefined,
+    reviewedAt: row.reviewed_at ?? undefined,
+    reviewedStage: row.reviewed_stage ?? undefined
+  })
 
   return {
     id: row.id,
@@ -280,10 +280,13 @@ function mapLead(
     summary: row.summary ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    reviewedAt: row.reviewed_at ?? undefined,
+    reviewedStage: row.reviewed_stage ?? undefined,
     answers,
     customAnswers,
     scoreBreakdown: parseBreakdown(scoreRow?.breakdown ?? null),
-    scoreOverride
+    scoreOverride,
+    review
   }
 }
 
@@ -442,6 +445,26 @@ export async function listLeads(
     .from("leads")
     .select("*")
     .eq("agent_id", agentId)
+    .order("updated_at", { ascending: false })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []).map((row) => mapLead(row))
+}
+
+export async function listNewLeadsForReview(
+  client: AppSupabaseClient,
+  agentId: string
+) {
+  const { data, error } = await client
+    .from("leads")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("status", "submitted")
+    .eq("pipeline_stage", "new")
+    .order("submitted_at", { ascending: false })
     .order("updated_at", { ascending: false })
 
   if (error) {
@@ -682,6 +705,33 @@ export async function updateLeadStage(
   return mapLead(data)
 }
 
+export async function reviewLead(
+  client: AppSupabaseClient,
+  agentId: string,
+  leadId: string,
+  pipelineStage: Extract<LeadStage, "ready" | "nurture" | "hold">
+) {
+  const reviewedAt = nowIso()
+  const { data, error } = await client
+    .from("leads")
+    .update({
+      pipeline_stage: pipelineStage,
+      reviewed_stage: pipelineStage,
+      reviewed_at: reviewedAt,
+      updated_at: reviewedAt
+    })
+    .eq("agent_id", agentId)
+    .eq("id", leadId)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return mapLead(data)
+}
+
 export async function overrideLeadScore(
   client: AppSupabaseClient,
   agentId: string,
@@ -779,7 +829,7 @@ export async function overrideLeadScore(
     .update({
       score: overrideScore,
       recommendation: overrideRecommendation,
-      pipeline_stage: recommendationToStage(overrideRecommendation),
+      pipeline_stage: getSuggestedStage(overrideRecommendation) ?? "hold",
       summary: `Manual override to ${overrideScore.toFixed(2)}. ${note}`,
       updated_at: nowIso()
     })
@@ -1194,9 +1244,11 @@ export async function submitInvite(
     .from("leads")
     .update({
       status: "submitted",
-      pipeline_stage: recommendationToStage(scored.recommendation),
+      pipeline_stage: "new",
       score: scored.total,
       recommendation: scored.recommendation,
+      reviewed_stage: null,
+      reviewed_at: null,
       summary: persistedSummary,
       submitted_at: nowIso(),
       updated_at: nowIso()

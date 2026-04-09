@@ -95,6 +95,8 @@ export type Database = {
           pipeline_stage: "new" | "ready" | "nurture" | "hold" | "closed"
           score: number | null
           recommendation: "show" | "nurture" | "hold" | null
+          reviewed_stage: "new" | "ready" | "nurture" | "hold" | "closed" | null
+          reviewed_at: string | null
           summary: string | null
           submitted_at: string | null
           created_at: string
@@ -113,6 +115,8 @@ export type Database = {
           pipeline_stage?: "new" | "ready" | "nurture" | "hold" | "closed"
           score?: number | null
           recommendation?: "show" | "nurture" | "hold" | null
+          reviewed_stage?: "new" | "ready" | "nurture" | "hold" | "closed" | null
+          reviewed_at?: string | null
           summary?: string | null
           submitted_at?: string | null
           created_at?: string

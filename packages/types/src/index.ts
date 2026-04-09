@@ -146,6 +146,14 @@ export type ScoreOverride = {
   createdByAgentId: string
 }
 
+export type LeadReview = {
+  suggestedStage?: LeadStage
+  reviewedStage?: LeadStage
+  reviewedAt?: string
+  isReviewed: boolean
+  isOverride: boolean
+}
+
 export type CustomQuestionType = "single_select" | "multi_select" | "text"
 
 export type QuestionOption = {
@@ -227,10 +235,13 @@ export type Lead = {
   summary?: string
   createdAt: string
   updatedAt: string
+  reviewedAt?: string
+  reviewedStage?: LeadStage
   answers?: IntakeDraft
   customAnswers?: Record<string, string | string[]>
   scoreBreakdown?: ScoreBreakdown
   scoreOverride?: ScoreOverride
+  review?: LeadReview
 }
 
 export type Invite = {
@@ -613,6 +624,7 @@ export function getQuestionLabel(questionKey: string): string {
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "layout-dashboard" },
+  { href: "/new-leads", label: "New Leads", icon: "inbox" },
   { href: "/leads", label: "Leads", icon: "users" },
   { href: "/settings", label: "Settings", icon: "settings-2" }
 ]

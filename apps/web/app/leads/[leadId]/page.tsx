@@ -9,12 +9,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { buildAppUrl, formatDate } from "@/lib/utils";
 import { flattenDraftAnswers } from "@/lib/intake-draft";
 import { getLeadDetailMoveTargets } from "@/lib/lead-stage";
+import { getSuggestedStage } from "@/lib/lead-review";
 import { getCurrentAgentContext } from "@/lib/session";
-import { overrideLeadScoreAction, updateLeadStageAction } from "@/lib/actions";
+import { overrideLeadScoreAction, reviewLeadAction, updateLeadStageAction } from "@/lib/actions";
 import { getLeadById } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatIntakeTypeLabel } from "@/lib/intake-config";
 import { getQuestionLabel } from "@showready/types";
+
+const REVIEW_STAGE_LABELS = {
+  ready: "Ready",
+  nurture: "Nurture",
+  hold: "Hold"
+} as const
 
 export default async function LeadDetailPage({
   params
@@ -35,9 +42,11 @@ export default async function LeadDetailPage({
   }
   const flattenedAnswers = lead.answers ? flattenDraftAnswers(lead.answers) : {}
   const moveTargets = getLeadDetailMoveTargets(lead.pipelineStage)
+  const suggestedStage = getSuggestedStage(lead.recommendation)
+  const isPendingReview = lead.pipelineStage === "new"
 
   return (
-    <AppShell currentPath="/leads" eyebrow="Lead detail" heading={lead.buyerName}>
+    <AppShell currentPath={isPendingReview ? "/new-leads" : "/leads"} eyebrow="Lead detail" heading={lead.buyerName}>
       <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
         <Card className="h-fit p-6 xl:sticky xl:top-28">
           <div className="flex items-start justify-between gap-4">
@@ -70,14 +79,44 @@ export default async function LeadDetailPage({
               {buildAppUrl(`/intake/${lead.token}`)}
             </p>
           </div>
-          <form action={updateLeadStageAction} className="mt-6 grid gap-3">
-            <input type="hidden" name="leadId" value={lead.id} />
-            {moveTargets.map((stage) => (
-              <Button key={stage} type="submit" variant="secondary" name="pipelineStage" value={stage}>
-                Move to {stage}
-              </Button>
-            ))}
-          </form>
+          {lead.review?.isReviewed ? (
+            <div className="mt-4 rounded-[24px] bg-[color:var(--surface-strong)] p-4 text-sm leading-7 text-[color:var(--muted-ink)]">
+              Suggested: {lead.review.suggestedStage ? REVIEW_STAGE_LABELS[lead.review.suggestedStage as keyof typeof REVIEW_STAGE_LABELS] ?? lead.review.suggestedStage : "Pending"}
+              {" · "}
+              Confirmed as: {lead.review.reviewedStage ? REVIEW_STAGE_LABELS[lead.review.reviewedStage as keyof typeof REVIEW_STAGE_LABELS] ?? lead.review.reviewedStage : "Pending"}
+              {lead.review.reviewedAt ? ` · Reviewed ${formatDate(lead.review.reviewedAt)}` : ""}
+            </div>
+          ) : null}
+          {isPendingReview ? (
+            <div className="mt-6 grid gap-3">
+              {suggestedStage ? (
+                <form action={reviewLeadAction}>
+                  <input type="hidden" name="leadId" value={lead.id} />
+                  <input type="hidden" name="pipelineStage" value={suggestedStage} />
+                  <Button type="submit" className="w-full">
+                    Confirm suggestion
+                  </Button>
+                </form>
+              ) : null}
+              {(["ready", "nurture", "hold"] as const).map((stage) => (
+                <form key={stage} action={reviewLeadAction}>
+                  <input type="hidden" name="leadId" value={lead.id} />
+                  <Button type="submit" variant="secondary" className="w-full" name="pipelineStage" value={stage}>
+                    Move to {REVIEW_STAGE_LABELS[stage]}
+                  </Button>
+                </form>
+              ))}
+            </div>
+          ) : (
+            <form action={updateLeadStageAction} className="mt-6 grid gap-3">
+              <input type="hidden" name="leadId" value={lead.id} />
+              {moveTargets.map((stage) => (
+                <Button key={stage} type="submit" variant="secondary" name="pipelineStage" value={stage}>
+                  Move to {stage}
+                </Button>
+              ))}
+            </form>
+          )}
         </Card>
         <div className="space-y-6">
           <Card className="p-6">

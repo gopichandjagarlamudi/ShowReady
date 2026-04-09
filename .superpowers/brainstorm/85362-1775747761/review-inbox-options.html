@@ -1,0 +1,99 @@
+<h2>New Leads Review Inbox</h2>
+<p class="subtitle">Choose the review model that feels clearest for agents on desktop and mobile.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Option A · Dedicated inbox queue</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Dashboard | New Leads (4) | Pipeline | Settings</div>
+          <div style="display:grid;gap:12px;margin-top:12px">
+            <div style="padding:14px;border:1px solid #d6d3d1;border-radius:18px;background:#fff">
+              <div style="display:flex;justify-content:space-between;gap:12px">
+                <div>
+                  <strong>Sarah Chen</strong><br>
+                  <span style="font-size:12px;color:#57534e">Submitted 12 min ago</span>
+                </div>
+                <span style="padding:6px 10px;border-radius:999px;background:#ecfeff;color:#155e75;font-size:12px">Suggest: SHOW</span>
+              </div>
+              <div style="margin-top:10px;font-size:13px;color:#44403c">8.4/10 · Pre-approved · Buying in 30 days · Clear neighborhoods</div>
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                <button class="mock-button">Confirm</button>
+                <button class="mock-button">Ready</button>
+                <button class="mock-button">Nurture</button>
+                <button class="mock-button">Hold</button>
+              </div>
+            </div>
+            <div class="placeholder">More review cards below</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Option A · Dedicated inbox</h3>
+      <p>Separate review surface for every new submission before it enters the live pipeline.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Option B · Inbox above pipeline</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Dashboard | Leads | Settings</div>
+          <div style="margin-top:12px;padding:12px;border:1px solid #d6d3d1;border-radius:18px;background:#fafaf9">
+            <strong>Needs review · 4 leads</strong>
+            <div style="margin-top:10px;padding:12px;border-radius:16px;background:#fff;border:1px solid #e7e5e4">
+              <strong>Sarah Chen</strong>
+              <div style="font-size:12px;color:#57534e;margin-top:6px">8.4/10 · Suggest: SHOW</div>
+              <div style="margin-top:10px;font-size:13px;color:#44403c">Pre-approved · buying in 30 days</div>
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                <button class="mock-button">Confirm</button>
+                <button class="mock-button">Override</button>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:14px" class="placeholder">Ready to show section</div>
+          <div style="margin-top:10px" class="placeholder">Nurture section</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Option B · Same page hybrid</h3>
+      <p>Review queue sits at the top of the existing leads page, with the pipeline directly below.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Option C · Compact triage table</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Dashboard | New Leads (4) | Pipeline | Settings</div>
+          <div style="margin-top:12px;border:1px solid #d6d3d1;border-radius:18px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.6fr .7fr .9fr 1.4fr;background:#fafaf9;padding:10px 12px;font-size:12px;color:#57534e">
+              <div>Lead</div><div>Score</div><div>Suggest</div><div>Action</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.6fr .7fr .9fr 1.4fr;padding:12px;font-size:13px;border-top:1px solid #e7e5e4">
+              <div>Sarah Chen<br><span style="font-size:12px;color:#78716c">12 min ago</span></div>
+              <div>8.4/10</div>
+              <div>SHOW</div>
+              <div>Confirm / Move</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.6fr .7fr .9fr 1.4fr;padding:12px;font-size:13px;border-top:1px solid #e7e5e4">
+              <div>Amir Patel<br><span style="font-size:12px;color:#78716c">31 min ago</span></div>
+              <div>6.1/10</div>
+              <div>NURTURE</div>
+              <div>Confirm / Move</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Option C · Dense review table</h3>
+      <p>Highest throughput on desktop, but lighter editorial feel and weaker mobile ergonomics.</p>
+    </div>
+  </div>
+</div>

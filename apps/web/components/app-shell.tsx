@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { LayoutDashboard, Settings2, Users } from "lucide-react";
+import { Inbox, LayoutDashboard, Settings2, Users } from "lucide-react";
 import { NAVIGATION_ITEMS } from "@showready/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/lib/actions";
 
 const iconMap = {
+  inbox: Inbox,
   "layout-dashboard": LayoutDashboard,
   users: Users,
   "settings-2": Settings2
@@ -87,8 +88,9 @@ export function AppShell({
             {children}
           </main>
           <nav
-            className="sticky bottom-0 z-30 grid grid-cols-3 border-t border-[color:var(--border)] bg-white/90 px-3 py-2 backdrop-blur lg:hidden"
+            className="sticky bottom-0 z-30 grid border-t border-[color:var(--border)] bg-white/90 px-3 py-2 backdrop-blur lg:hidden"
             aria-label="Mobile primary"
+            style={{ gridTemplateColumns: `repeat(${NAVIGATION_ITEMS.length}, minmax(0, 1fr))` }}
           >
             {NAVIGATION_ITEMS.map((item) => {
               const Icon = iconMap[item.icon as keyof typeof iconMap];

@@ -13,10 +13,12 @@ type LeadsManagerProps = {
   leads: Lead[]
 }
 
-const STAGE_ORDER: LeadStage[] = ["ready", "nurture", "hold", "new", "closed"]
+type PipelineStage = Exclude<LeadStage, "new">
+
+const STAGE_ORDER: PipelineStage[] = ["ready", "nurture", "hold", "closed"]
 
 const STAGE_META: Record<
-  LeadStage,
+  PipelineStage,
   {
     title: string
     description: string
@@ -46,13 +48,6 @@ const STAGE_META: Record<
     headerClassName: "border-[color:var(--hold)]/10 bg-[color:var(--hold-soft)]",
     badgeClassName: "bg-[color:var(--surface)] text-[color:var(--hold)]"
   },
-  new: {
-    title: "New",
-    description: "Fresh submissions that still need your first review and disposition.",
-    emptyMessage: "No new leads yet.",
-    headerClassName: "border-[color:var(--border)] bg-[color:var(--surface-strong)]",
-    badgeClassName: "bg-[color:var(--surface)] text-[color:var(--ink)]"
-  },
   closed: {
     title: "Closed",
     description: "Completed pipeline outcomes that you want visible but out of the active queue.",
@@ -63,12 +58,20 @@ const STAGE_META: Record<
 }
 
 function getStageLabel(stage: LeadStage) {
-  return STAGE_META[stage].title
+  return stage === "new" ? "New" : STAGE_META[stage].title
+}
+
+function isPipelineStage(stage: LeadStage): stage is PipelineStage {
+  return stage !== "new"
 }
 
 export function LeadsManager({ leads }: LeadsManagerProps) {
+  const pipelineLeads = useMemo(
+    () => leads.filter((lead) => isPipelineStage(lead.pipelineStage)),
+    [leads]
+  )
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([])
-  const allSelected = leads.length > 0 && selectedLeadIds.length === leads.length
+  const allSelected = pipelineLeads.length > 0 && selectedLeadIds.length === pipelineLeads.length
   const selectedCount = selectedLeadIds.length
 
   const selectedIdSet = useMemo(() => new Set(selectedLeadIds), [selectedLeadIds])
@@ -77,9 +80,9 @@ export function LeadsManager({ leads }: LeadsManagerProps) {
       STAGE_ORDER.map((stage) => ({
         stage,
         ...STAGE_META[stage],
-        leads: leads.filter((lead) => lead.pipelineStage === stage)
+        leads: pipelineLeads.filter((lead) => lead.pipelineStage === stage)
       })),
-    [leads]
+    [pipelineLeads]
   )
 
   function toggleLead(leadId: string, checked: boolean) {
@@ -89,15 +92,15 @@ export function LeadsManager({ leads }: LeadsManagerProps) {
   }
 
   function toggleAll(checked: boolean) {
-    setSelectedLeadIds(checked ? leads.map((lead) => lead.id) : [])
+    setSelectedLeadIds(checked ? pipelineLeads.map((lead) => lead.id) : [])
   }
 
-  if (leads.length === 0) {
+  if (pipelineLeads.length === 0) {
     return (
       <Card className="p-6">
-        <p className="font-display text-2xl text-[color:var(--ink)]">No leads yet</p>
+        <p className="font-display text-2xl text-[color:var(--ink)]">No reviewed pipeline leads yet</p>
         <p className="mt-2 text-sm leading-6 text-[color:var(--muted-ink)]">
-          Completed invite submissions will appear here once a prospect finishes the intake.
+          Confirm leads from the New Leads inbox and they will appear here once they enter the active pipeline.
         </p>
       </Card>
     )

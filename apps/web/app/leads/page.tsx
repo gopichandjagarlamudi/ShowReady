@@ -15,7 +15,7 @@ export default async function LeadsPage() {
   const leads = await listLeads(supabase, context.agent.id)
 
   return (
-    <AppShell currentPath="/leads" eyebrow={context.settings.brandName} heading="All leads">
+    <AppShell currentPath="/leads" eyebrow={context.settings.brandName} heading="Pipeline">
       <LeadsManager leads={leads} />
     </AppShell>
   );

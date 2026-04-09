@@ -4,6 +4,11 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Reworked lead qualification into a suggest-first review workflow: completed intakes now stay in `pipeline_stage = new` after scoring, the app persists the score and recommendation immediately, and agents must confirm or override the suggested category before a lead enters the active pipeline.
+- Added a dedicated `/new-leads` review inbox with one-tap `Confirm suggestion` plus direct `Move to Ready / Nurture / Hold` actions, and updated the shared app-shell navigation so `New Leads` is a first-class destination on desktop and mobile.
+- Added persistent review metadata to the lead contract via `reviewed_stage` and `reviewed_at`, exposed shared `lead.review` helpers in `@showready/types`, and added `packages/db/migrations/0004_lead_review_inbox.sql` to backfill reviewed history for existing non-`new` leads.
+- Refactored `/leads` into a reviewed-pipeline-only surface, updated lead detail to show review-first actions for unreviewed leads plus suggestion-vs-confirmed history after review, and added focused coverage in `apps/web/lib/lead-review.test.ts`, `apps/web/components/new-leads-inbox.test.tsx`, and the updated `apps/web/components/leads-manager.test.tsx`.
+- Verified the new workflow with `corepack pnpm --filter @showready/web test -- lib/lead-review.test.ts components/new-leads-inbox.test.tsx components/leads-manager.test.tsx`, `corepack pnpm typecheck`, and `corepack pnpm --filter @showready/db build`.
 - Debugged the fresh-user auth failure that affected both email/password signup and Google OAuth: direct Supabase Admin `createUser()` reproduction returned `AuthApiError: Database error creating new user`, and live database inspection showed `public.handle_new_user()` had drifted to an older version that inserted `question_templates` rows without the required `intake_type` column.
 - Added `packages/db/migrations/0003_repair_auth_user_scaffold.sql` to reapply the current `handle_new_user()` contract on existing Supabase projects, including sale and rental template creation with `intake_type` plus the correct `(agent_id, intake_type)` conflict handling.
 - Added `packages/db/tests/repair-auth-trigger.test.ts` to lock the repair migration contract, then verified the fix with `corepack pnpm --filter @showready/db test -- tests/repair-auth-trigger.test.ts`, `psql "$DATABASE_URL" -f packages/db/migrations/0003_repair_auth_user_scaffold.sql`, and a repeat admin-side `createUser()` repro that now succeeds against the connected Supabase project.
@@ -75,6 +80,9 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - Tightened the `AGENTS.md` documentation-maintenance rule so repo-memory updates are required after meaningful work that changes behavior, workflow, status, risks, blockers, or verification state, rather than after any trivial edit.
 
 ## Likely Active Files / Areas
+- `apps/web/app/new-leads/page.tsx`
+- `apps/web/components/new-leads-inbox.tsx`
+- `apps/web/components/new-leads-inbox.test.tsx`
 - `apps/web/components/leads-manager.tsx`
 - `apps/web/components/leads-manager.test.tsx`
 - `apps/web/vitest.config.ts`
@@ -90,6 +98,8 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `apps/web/app/(auth)/register/page.tsx`
 - `apps/web/app/(auth)/login/page.tsx`
 - `apps/web/lib/intake-guards.ts`
+- `apps/web/lib/lead-review.ts`
+- `apps/web/lib/lead-review.test.ts`
 - `proxy.ts`
 - `apps/web/lib/actions.ts`
 - `apps/web/lib/session.ts`
@@ -101,11 +111,14 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `packages/db/migrations/0000_showready_phase1.sql`
 - `packages/db/migrations/0001_sale_rental_intake.sql`
 - `packages/db/migrations/0002_magic_link_invites.sql`
+- `packages/db/migrations/0004_lead_review_inbox.sql`
 - `packages/types/src/index.ts`
 - `packages/scoring/src/index.ts`
 - `apps/web/scripts/seed-supabase.ts`
 
 ## Open Issues / Loose Ends
+- The new review-inbox workflow has unit/component coverage and workspace typecheck only; authenticated browser verification of `/new-leads`, its review actions, and the updated lead-detail flow is still blocked by the existing local `/auth/login` redirect bounce.
+- Any Supabase environment that should use the new review workflow must apply `packages/db/migrations/0004_lead_review_inbox.sql`; without it, `reviewed_stage` / `reviewed_at` will be missing and existing reviewed leads will not get backfilled history.
 - Browser verification of the local agent-authenticated dashboard and lead-detail surfaces is still blocked by the current `/auth/login` redirect bounce back to `/login`; the new lead-detail stage-control change was verified with targeted Vitest coverage and typecheck only, while `apps/web/tests/e2e/dashboard-invite.spec.ts` remains skipped until the local auth redirect loop is fixed or replaced with a reliable authenticated setup path.
 - Preview deployments protected by Vercel Authentication still return `HTTP 500` on browser `POST /auth/register` before runtime code executes, even after the app-side share-token preservation fix; this appears to be a platform protection constraint rather than an app runtime exception.
 - Google OAuth reaches the live Google sign-in screen with the correct production callback, but a full callback completion still requires entering a real Google account in the browser.
@@ -132,7 +145,7 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 2. Run `git status`.
 3. Verify whether the target Supabase project env vars are present locally.
 4. Skim `README.md`, `proxy.ts`, `apps/web/lib/intake-config.ts`, `apps/web/lib/supabase`, and the closest app route files.
-5. If the task involves real runtime verification, ensure `packages/db/migrations/0000_showready_phase1.sql`, `packages/db/migrations/0001_sale_rental_intake.sql`, `packages/db/migrations/0002_magic_link_invites.sql`, and `packages/db/migrations/0003_repair_auth_user_scaffold.sql` have been applied, then run `corepack pnpm --filter @showready/web seed:supabase`.
+5. If the task involves real runtime verification, ensure `packages/db/migrations/0000_showready_phase1.sql`, `packages/db/migrations/0001_sale_rental_intake.sql`, `packages/db/migrations/0002_magic_link_invites.sql`, `packages/db/migrations/0003_repair_auth_user_scaffold.sql`, and `packages/db/migrations/0004_lead_review_inbox.sql` have been applied, then run `corepack pnpm --filter @showready/web seed:supabase`.
 
 ## How Future Codex Threads Should Start
 - Start with `AGENTS.md`.
@@ -153,4 +166,5 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - This thread also confirmed that disabling Supabase email confirmations immediately unblocked production self-serve signup, while Google OAuth on the same deployment now reaches Google with the expected `/auth/callback` redirect target.
 - This thread also replaced the dashboard lead-creation assumption with the invite-first intake architecture, rewired autosave/submit around invite conversion, and verified the buyer and rental public invite flows end to end in Playwright after reseeding the Supabase demo data.
 - This thread also found that the connected Supabase project was still running a stale `public.handle_new_user()` trigger function from before `question_templates.intake_type` became required; applying `packages/db/migrations/0003_repair_auth_user_scaffold.sql` repaired the live function and restored new-user creation.
+- This thread also changed the lead workflow from score-and-auto-file to score-and-review: submitted leads now land in `/new-leads`, and agents must confirm or override the suggested category before the lead enters the pipeline.
 - Future threads should not assume the old mock JSON store is still on the active request path.

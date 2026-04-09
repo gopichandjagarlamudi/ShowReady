@@ -148,6 +148,8 @@ export const leads = pgTable(
       mode: "number"
     }),
     recommendation: recommendationEnum("recommendation"),
+    reviewedStage: leadStageEnum("reviewed_stage"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     summary: text("summary"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

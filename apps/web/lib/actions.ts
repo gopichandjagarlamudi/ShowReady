@@ -6,6 +6,7 @@ import {
   deleteLeads,
   ensureAgentScaffold,
   overrideLeadScore,
+  reviewLead,
   updateLeadStage
 } from "@/lib/supabase/data"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -226,6 +227,35 @@ export async function updateLeadStageAction(formData: FormData) {
   revalidatePath(`/leads/${leadId}`)
   revalidatePath("/dashboard")
   revalidatePath("/leads")
+  revalidatePath("/new-leads")
+}
+
+export async function reviewLeadAction(formData: FormData) {
+  const agentId = await getCurrentAgentId()
+  if (!agentId) {
+    redirect("/login")
+  }
+
+  const leadId = getString(formData, "leadId")
+  const pipelineStage = getString(formData, "pipelineStage") as
+    | "ready"
+    | "nurture"
+    | "hold"
+
+  const supabase = await createSupabaseServerClient()
+  await reviewLead(supabase, agentId, leadId, pipelineStage)
+  await trackServerEvent(
+    "lead.reviewed",
+    {
+      pipelineStage
+    },
+    agentId
+  )
+
+  revalidatePath(`/leads/${leadId}`)
+  revalidatePath("/dashboard")
+  revalidatePath("/leads")
+  revalidatePath("/new-leads")
 }
 
 export async function overrideLeadScoreAction(formData: FormData) {
@@ -251,6 +281,7 @@ export async function overrideLeadScoreAction(formData: FormData) {
   revalidatePath(`/leads/${leadId}`)
   revalidatePath("/dashboard")
   revalidatePath("/leads")
+  revalidatePath("/new-leads")
 }
 
 export async function deleteLeadsAction(formData: FormData) {
@@ -281,6 +312,7 @@ export async function deleteLeadsAction(formData: FormData) {
 
   revalidatePath("/dashboard")
   revalidatePath("/leads")
+  revalidatePath("/new-leads")
 }
 
 export async function getDashboardContext() {

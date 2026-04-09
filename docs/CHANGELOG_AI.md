@@ -1,5 +1,12 @@
 # AI Changelog
 
+## 2026-04-09
+- Added a suggest-first lead review workflow so completed intakes stay in `new` after scoring until an agent confirms or overrides the suggested category.
+- Added a dedicated `/new-leads` inbox page plus a new `New Leads` app-shell nav item, and refactored `/leads` into a reviewed-pipeline-only view.
+- Extended the lead contract with persistent review metadata (`reviewed_stage`, `reviewed_at`, shared `lead.review` mapping) and added `packages/db/migrations/0004_lead_review_inbox.sql` to backfill reviewed history for existing leads.
+- Updated lead detail to show review-first actions for unreviewed leads and suggestion-vs-confirmed history after review.
+- Verified the change with `corepack pnpm --filter @showready/web test -- lib/lead-review.test.ts components/new-leads-inbox.test.tsx components/leads-manager.test.tsx`, `corepack pnpm typecheck`, and `corepack pnpm --filter @showready/db build`.
+
 ## 2026-04-08
 - Debugged the shared auth onboarding failure affecting both email/password signup and Google OAuth: direct Supabase Admin `createUser()` calls reproduced `AuthApiError: Database error creating new user`, and live DB inspection showed the connected project's `public.handle_new_user()` trigger function had drifted to an older version that inserted `question_templates` rows without the now-required `intake_type` column.
 - Added `packages/db/migrations/0003_repair_auth_user_scaffold.sql` to reapply the current auth-trigger scaffold on existing Supabase projects, and added `packages/db/tests/repair-auth-trigger.test.ts` so the repair migration is regression-tested in the repo.

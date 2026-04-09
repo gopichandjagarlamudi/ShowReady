@@ -29,10 +29,14 @@ SUPABASE_SERVICE_ROLE_KEY=...
 DATABASE_URL=...
 ```
 
-4. Apply the database migration to Supabase:
+4. Apply the database migrations to Supabase:
 
 ```bash
 psql "$DATABASE_URL" -f packages/db/migrations/0000_showready_phase1.sql
+psql "$DATABASE_URL" -f packages/db/migrations/0001_sale_rental_intake.sql
+psql "$DATABASE_URL" -f packages/db/migrations/0002_magic_link_invites.sql
+psql "$DATABASE_URL" -f packages/db/migrations/0003_repair_auth_user_scaffold.sql
+psql "$DATABASE_URL" -f packages/db/migrations/0004_lead_review_inbox.sql
 ```
 
 5. Seed the demo account and sample data:

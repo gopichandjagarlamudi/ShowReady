@@ -51,7 +51,7 @@ function buildLead(overrides: Partial<Lead>): Lead {
 }
 
 describe("LeadsManager", () => {
-  it("renders stage sections in pipeline order with empty states", () => {
+  it("renders only reviewed pipeline sections in order with empty states", () => {
     const html = renderToStaticMarkup(
       <LeadsManager
         leads={[
@@ -79,19 +79,18 @@ describe("LeadsManager", () => {
     const readyIndex = html.indexOf("Ready to show")
     const nurtureIndex = html.indexOf("Nurture")
     const holdIndex = html.indexOf("Hold")
-    const newIndex = html.indexOf(">New<")
     const closedIndex = html.indexOf("Closed")
 
     expect(readyIndex).toBeGreaterThan(-1)
     expect(nurtureIndex).toBeGreaterThan(readyIndex)
     expect(holdIndex).toBeGreaterThan(nurtureIndex)
-    expect(newIndex).toBeGreaterThan(holdIndex)
-    expect(closedIndex).toBeGreaterThan(newIndex)
+    expect(closedIndex).toBeGreaterThan(holdIndex)
 
     expect(html).toContain("No nurture leads yet.")
     expect(html).toContain("No closed leads yet.")
     expect(html).toContain("Ready Buyer")
     expect(html).toContain("Hold Buyer")
-    expect(html).toContain("New Buyer")
+    expect(html).not.toContain(">New<")
+    expect(html).not.toContain("New Buyer")
   })
 })
