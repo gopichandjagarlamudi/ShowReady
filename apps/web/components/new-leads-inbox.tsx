@@ -12,12 +12,12 @@ type NewLeadsInboxProps = {
 }
 
 const REVIEW_STAGE_LABELS = {
-  ready: "Ready",
+  ready_to_show: "Ready to show",
   nurture: "Nurture",
   hold: "Hold"
 } as const
 
-type ReviewStage = Extract<LeadStage, "ready" | "nurture" | "hold">
+type ReviewStage = Extract<LeadStage, "ready_to_show" | "nurture" | "hold">
 
 export function NewLeadsInbox({ leads }: NewLeadsInboxProps) {
   if (leads.length === 0) {
@@ -100,7 +100,7 @@ export function NewLeadsInbox({ leads }: NewLeadsInboxProps) {
                     ) : null}
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                      {(["ready", "nurture", "hold"] as const).map((stage) => (
+                      {(["ready_to_show", "nurture", "hold"] as const).map((stage) => (
                         <form key={stage} action={reviewLeadAction} className="sm:flex-1">
                           <input type="hidden" name="leadId" value={lead.id} />
                           <input type="hidden" name="pipelineStage" value={stage} />

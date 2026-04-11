@@ -70,9 +70,9 @@ describe("NewLeadsInbox", () => {
 
     expect(html).toContain("New Leads")
     expect(html).toContain("Ready Buyer")
-    expect(html).toContain("Suggested: Ready")
+    expect(html).toContain("Suggested: Ready to show")
     expect(html).toContain("Confirm suggestion")
-    expect(html).toContain("Move to Ready")
+    expect(html).toContain("Move to Ready to show")
     expect(html).toContain("Move to Nurture")
     expect(html).toContain("Move to Hold")
     expect(html).toContain("Review details")

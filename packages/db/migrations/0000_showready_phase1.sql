@@ -1,7 +1,16 @@
 create extension if not exists pgcrypto;
 
 create type "lead_status" as enum ('pending', 'submitted', 'archived');
-create type "lead_stage" as enum ('new', 'ready', 'nurture', 'hold', 'closed');
+create type "lead_stage" as enum (
+  'new',
+  'ready_to_show',
+  'appointment_booked',
+  'nurture',
+  'hold',
+  'closed_won',
+  'closed_lost',
+  'archived'
+);
 create type "recommendation" as enum ('show', 'nurture', 'hold');
 create type "notification_preference" as enum ('email', 'email_and_push');
 create type "intake_type" as enum ('sale', 'rental');

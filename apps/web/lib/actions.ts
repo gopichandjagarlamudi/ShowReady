@@ -2,11 +2,14 @@
 
 import {
   completeOnboarding,
+  createAppointment,
   createInvite,
   deleteLeads,
   ensureAgentScaffold,
   overrideLeadScore,
   reviewLead,
+  updateAppointment,
+  updateAppointmentStatus,
   updateLeadStage
 } from "@/lib/supabase/data"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -16,6 +19,7 @@ import { redirect } from "next/navigation"
 import { getCurrentAgentContext, getCurrentAgentId } from "./session"
 import { trackServerEvent } from "./analytics"
 import { buildAppUrl } from "./utils"
+import type { AppointmentStatus } from "@showready/types"
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim()
@@ -49,6 +53,16 @@ function parseCustomQuestions(formData: FormData) {
       }
     })
     .filter((question): question is NonNullable<typeof question> => Boolean(question))
+}
+
+function parseShowings(formData: FormData) {
+  const addresses = formData.getAll("showingAddress").map((value) => String(value ?? ""))
+  const notes = formData.getAll("showingNotes").map((value) => String(value ?? ""))
+
+  return addresses.map((address, index) => ({
+    address,
+    notes: notes[index]
+  }))
 }
 
 export async function loginAction(formData: FormData) {
@@ -200,6 +214,65 @@ export async function createInviteAction() {
   }
 }
 
+export async function saveAppointmentAction(formData: FormData) {
+  const agentId = await getCurrentAgentId()
+  if (!agentId) {
+    redirect("/login")
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const appointmentId = getString(formData, "appointmentId")
+  const leadId = getString(formData, "leadId")
+  const date = getString(formData, "date")
+  const startTime = getString(formData, "startTime")
+  const notes = getString(formData, "notes")
+  const showings = parseShowings(formData)
+
+  if (appointmentId) {
+    await updateAppointment(supabase, agentId, appointmentId, {
+      date,
+      startTime,
+      notes,
+      showings
+    })
+    await trackServerEvent("appointment.updated", { appointmentId }, agentId)
+  } else {
+    await createAppointment(supabase, agentId, {
+      leadId,
+      date,
+      startTime,
+      notes,
+      showings
+    })
+    await trackServerEvent("appointment.created", { leadId }, agentId)
+  }
+
+  revalidatePath("/appointments")
+  revalidatePath(`/leads/${leadId}`)
+  revalidatePath("/leads")
+  revalidatePath("/dashboard")
+}
+
+export async function updateAppointmentStatusAction(formData: FormData) {
+  const agentId = await getCurrentAgentId()
+  if (!agentId) {
+    redirect("/login")
+  }
+
+  const appointmentId = getString(formData, "appointmentId")
+  const leadId = getString(formData, "leadId")
+  const status = getString(formData, "status") as AppointmentStatus
+  const supabase = await createSupabaseServerClient()
+
+  await updateAppointmentStatus(supabase, agentId, appointmentId, status)
+  await trackServerEvent("appointment.status_changed", { appointmentId, status }, agentId)
+
+  revalidatePath("/appointments")
+  revalidatePath(`/leads/${leadId}`)
+  revalidatePath("/leads")
+  revalidatePath("/dashboard")
+}
+
 export async function updateLeadStageAction(formData: FormData) {
   const agentId = await getCurrentAgentId()
   if (!agentId) {
@@ -208,11 +281,12 @@ export async function updateLeadStageAction(formData: FormData) {
 
   const leadId = getString(formData, "leadId")
   const pipelineStage = getString(formData, "pipelineStage") as
-    | "new"
-    | "ready"
+    | "ready_to_show"
     | "nurture"
     | "hold"
-    | "closed"
+    | "closed_won"
+    | "closed_lost"
+    | "archived"
 
   const supabase = await createSupabaseServerClient()
   await updateLeadStage(supabase, agentId, leadId, pipelineStage)
@@ -228,6 +302,7 @@ export async function updateLeadStageAction(formData: FormData) {
   revalidatePath("/dashboard")
   revalidatePath("/leads")
   revalidatePath("/new-leads")
+  revalidatePath("/appointments")
 }
 
 export async function reviewLeadAction(formData: FormData) {
@@ -238,7 +313,7 @@ export async function reviewLeadAction(formData: FormData) {
 
   const leadId = getString(formData, "leadId")
   const pipelineStage = getString(formData, "pipelineStage") as
-    | "ready"
+    | "ready_to_show"
     | "nurture"
     | "hold"
 
@@ -256,6 +331,7 @@ export async function reviewLeadAction(formData: FormData) {
   revalidatePath("/dashboard")
   revalidatePath("/leads")
   revalidatePath("/new-leads")
+  revalidatePath("/appointments")
 }
 
 export async function overrideLeadScoreAction(formData: FormData) {
@@ -282,6 +358,7 @@ export async function overrideLeadScoreAction(formData: FormData) {
   revalidatePath("/dashboard")
   revalidatePath("/leads")
   revalidatePath("/new-leads")
+  revalidatePath("/appointments")
 }
 
 export async function deleteLeadsAction(formData: FormData) {
@@ -313,6 +390,7 @@ export async function deleteLeadsAction(formData: FormData) {
   revalidatePath("/dashboard")
   revalidatePath("/leads")
   revalidatePath("/new-leads")
+  revalidatePath("/appointments")
 }
 
 export async function getDashboardContext() {

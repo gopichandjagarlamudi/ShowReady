@@ -37,6 +37,7 @@ psql "$DATABASE_URL" -f packages/db/migrations/0001_sale_rental_intake.sql
 psql "$DATABASE_URL" -f packages/db/migrations/0002_magic_link_invites.sql
 psql "$DATABASE_URL" -f packages/db/migrations/0003_repair_auth_user_scaffold.sql
 psql "$DATABASE_URL" -f packages/db/migrations/0004_lead_review_inbox.sql
+psql "$DATABASE_URL" -f packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql
 ```
 
 5. Seed the demo account and sample data:
@@ -58,7 +59,7 @@ corepack pnpm --filter @showready/web dev
 - Email: `demo@showready.local`
 - Password: `demo12345`
 
-The seed script creates that auth user plus a branded agent profile, settings, template, and three sample leads spanning `show`, `nurture`, and `hold`.
+The seed script creates that auth user plus a branded agent profile, settings, template, and sample leads spanning the active pipeline stages.
 
 ## Quality gates
 

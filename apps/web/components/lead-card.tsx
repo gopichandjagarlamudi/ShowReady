@@ -1,8 +1,9 @@
-import Link from "next/link";
-import type { Lead } from "@showready/types";
-import { RecommendationBadge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { formatDate, formatScore } from "@/lib/utils";
+import Link from "next/link"
+import type { Lead } from "@showready/types"
+import { RecommendationBadge, StageBadge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { getLeadStageLabel } from "@/lib/lead-stage"
+import { formatDate, formatScore } from "@/lib/utils"
 
 export function LeadCard({ lead }: { lead: Lead }) {
   return (
@@ -14,7 +15,10 @@ export function LeadCard({ lead }: { lead: Lead }) {
             {lead.buyerEmail ?? lead.buyerPhone ?? "Awaiting contact details"}
           </p>
         </div>
-        <RecommendationBadge recommendation={lead.recommendation} />
+        <div className="flex flex-col items-end gap-2">
+          <StageBadge stage={lead.pipelineStage} />
+          {lead.recommendation ? <RecommendationBadge recommendation={lead.recommendation} /> : null}
+        </div>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div>
@@ -29,8 +33,8 @@ export function LeadCard({ lead }: { lead: Lead }) {
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[color:var(--muted-ink)]">
             Stage
           </p>
-          <p className="mt-1 text-lg font-semibold capitalize text-[color:var(--ink)]">
-            {lead.pipelineStage}
+          <p className="mt-1 text-lg font-semibold text-[color:var(--ink)]">
+            {getLeadStageLabel(lead.pipelineStage)}
           </p>
         </div>
         <div>
@@ -54,5 +58,5 @@ export function LeadCard({ lead }: { lead: Lead }) {
         Open lead detail
       </Link>
     </Card>
-  );
+  )
 }

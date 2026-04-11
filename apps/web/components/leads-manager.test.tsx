@@ -1,8 +1,13 @@
+// @vitest-environment jsdom
+
 import React, { type ReactNode } from "react"
+import { act } from "react"
+import { createRoot } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 import type { Lead } from "@showready/types"
-import { LeadsManager } from "./leads-manager"
+import { getLeadBoardStageOptions, getLeadStageLabel } from "@/lib/lead-stage"
+import { LeadsManager, reconcileSelectedLeadIds } from "./leads-manager"
 
 vi.mock("next/link", () => ({
   default: ({
@@ -20,8 +25,12 @@ vi.mock("next/link", () => ({
 }))
 
 vi.mock("@/lib/actions", () => ({
-  deleteLeadsAction: vi.fn()
+  deleteLeadsAction: vi.fn(),
+  updateLeadStageAction: vi.fn()
 }))
+
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true
 
 function buildLead(overrides: Partial<Lead>): Lead {
   return {
@@ -50,47 +59,266 @@ function buildLead(overrides: Partial<Lead>): Lead {
   }
 }
 
+function renderLeadsManager(leads: Lead[], options?: { activeTab?: any; outcomeTab?: any }) {
+  return renderToStaticMarkup(
+    <LeadsManager
+      leads={leads}
+      activeTab={options?.activeTab ?? "ready_to_show"}
+      outcomeTab={options?.outcomeTab ?? "closed_won"}
+    />
+  )
+}
+
 describe("LeadsManager", () => {
-  it("renders only reviewed pipeline sections in order with empty states", () => {
-    const html = renderToStaticMarkup(
-      <LeadsManager
-        leads={[
-          buildLead({
-            id: "lead-ready",
-            buyerName: "Ready Buyer",
-            pipelineStage: "ready",
-            recommendation: "show"
-          }),
-          buildLead({
-            id: "lead-hold",
-            buyerName: "Hold Buyer",
-            pipelineStage: "hold",
-            recommendation: "hold"
-          }),
-          buildLead({
-            id: "lead-new",
-            buyerName: "New Buyer",
-            pipelineStage: "new"
-          })
-        ]}
-      />
+  it("defaults the active workspace to Ready to show and hides the other active sections", () => {
+    const html = renderLeadsManager([
+      buildLead({
+        id: "lead-ready",
+        buyerName: "Ready Buyer",
+        pipelineStage: "ready_to_show",
+        recommendation: "show"
+      }),
+      buildLead({
+        id: "lead-nurture",
+        buyerName: "Nurture Buyer",
+        pipelineStage: "nurture",
+        recommendation: "nurture"
+      })
+    ])
+
+    expect(html).toContain("Active board")
+    expect(html).toContain('aria-selected="true"')
+    expect(html).toContain("Ready Buyer")
+    expect(html).not.toContain("Nurture Buyer")
+    expect(html).toContain('href="/leads?active=nurture&amp;outcome=closed_won"')
+  })
+
+  it("renders outcomes in a separate tab group", () => {
+    const html = renderLeadsManager(
+      [
+        buildLead({
+          id: "lead-lost",
+          buyerName: "Lost Buyer",
+          pipelineStage: "closed_lost",
+          recommendation: "hold"
+        })
+      ],
+      {
+        outcomeTab: "closed_lost"
+      }
     )
 
-    const readyIndex = html.indexOf("Ready to show")
-    const nurtureIndex = html.indexOf("Nurture")
-    const holdIndex = html.indexOf("Hold")
-    const closedIndex = html.indexOf("Closed")
+    expect(html).toContain("Outcomes")
+    expect(html).toContain('aria-label="Outcome lead categories"')
+    expect(html).toContain("Lost Buyer")
+    expect(html).toContain('href="/leads?active=ready_to_show&amp;outcome=archived"')
+  })
 
-    expect(readyIndex).toBeGreaterThan(-1)
-    expect(nurtureIndex).toBeGreaterThan(readyIndex)
-    expect(holdIndex).toBeGreaterThan(nurtureIndex)
-    expect(closedIndex).toBeGreaterThan(holdIndex)
+  it("renders compact card metadata with score and updated details", () => {
+    const html = renderLeadsManager([
+      buildLead({
+        id: "lead-ready",
+        buyerName: "Ready Buyer",
+        pipelineStage: "ready_to_show",
+        recommendation: "show"
+      })
+    ])
 
-    expect(html).toContain("No nurture leads yet.")
-    expect(html).toContain("No closed leads yet.")
-    expect(html).toContain("Ready Buyer")
+    expect(html).toContain("Score")
+    expect(html).toContain("Updated")
+    expect(html).toContain("Ready to show")
+  })
+
+  it("renders a persistent footer action bar while hiding board-card summary copy", () => {
+    const html = renderLeadsManager(
+      [
+        buildLead({
+          id: "lead-ready",
+          buyerName: "Fresh Buyer",
+          pipelineStage: "ready_to_show",
+          recommendation: "show",
+          summary: "Unique summary copy that should stay off the board."
+        })
+      ],
+      { activeTab: "ready_to_show" }
+    )
+
+    expect(html).toContain('aria-label="Lead category for Fresh Buyer"')
+    expect(html).toContain("More lead actions for Fresh Buyer")
+    expect(html).not.toContain("Unique summary copy that should stay off the board.")
+    expect((html.match(/inline-flex items-center rounded-full px-3 py-1 text-\[11px\]/g) ?? []).length).toBe(1)
+  })
+
+  it("keeps the bulk toolbar quiet until at least one lead is selected", () => {
+    const html = renderLeadsManager([
+      buildLead({
+        id: "lead-ready",
+        buyerName: "Ready Buyer",
+        pipelineStage: "ready_to_show",
+        recommendation: "show"
+      })
+    ])
+
+    expect(html).toContain("Select all leads")
+    expect(html).not.toContain("Delete selected")
+    expect(html).not.toContain("No leads selected")
+    expect(html).not.toContain("selected</p>")
+  })
+
+  it("shows the current stage plus valid next moves in the category dropdown", () => {
+    const html = renderLeadsManager(
+      [
+        buildLead({
+          id: "lead-booked",
+          buyerName: "Booked Buyer",
+          pipelineStage: "appointment_booked",
+          recommendation: "show"
+        })
+      ],
+      { activeTab: "appointment_booked" }
+    )
+
+    const expectedStages = getLeadBoardStageOptions("appointment_booked")
+
+    expect(html).toContain('aria-label="Lead category for Booked Buyer"')
+    expectedStages.forEach((stage) => {
+      expect(html).toContain(`value="${stage}"`)
+      expect(html).toContain(`>${getLeadStageLabel(stage)}</option>`)
+    })
+    expect(html).not.toContain('<option value="new">New</option>')
+  })
+
+  it("disables the category dropdown for new leads so board review flow cannot be bypassed", () => {
+    const html = renderLeadsManager([
+      buildLead({
+        id: "lead-new",
+        buyerName: "Fresh Buyer",
+        pipelineStage: "new"
+      })
+    ])
+
+    expect(html).toContain("New leads waiting for review: 1")
+    expect(html).toContain('href="/new-leads"')
+    expect(html).not.toContain('aria-label="Lead category for Fresh Buyer"')
+  })
+
+  it("puts secondary card actions behind a quiet overflow trigger", () => {
+    const html = renderLeadsManager([
+      buildLead({
+        id: "lead-ready",
+        buyerName: "Ready Buyer",
+        pipelineStage: "ready_to_show",
+        recommendation: "show"
+      })
+    ])
+
+    expect(html).toContain("More lead actions for Ready Buyer")
+    expect(html).toContain(">Open lead<")
+    expect(html).toContain(">Delete<")
+    expect(html).not.toContain("Open lead detail")
+  })
+
+  it("renders horizontal active and outcome tab rails with one visible section each", () => {
+    const html = renderLeadsManager(
+      [
+        buildLead({
+          id: "lead-ready",
+          buyerName: "Ready Buyer",
+          pipelineStage: "ready_to_show",
+          recommendation: "show"
+        }),
+        buildLead({
+          id: "lead-hold",
+          buyerName: "Hold Buyer",
+          pipelineStage: "hold",
+          recommendation: "hold"
+        }),
+        buildLead({
+          id: "lead-archived",
+          buyerName: "Archived Buyer",
+          pipelineStage: "archived",
+          recommendation: "hold"
+        })
+      ],
+      {
+        activeTab: "hold",
+        outcomeTab: "archived"
+      }
+    )
+
+    expect(html).toContain('role="tablist"')
+    expect(html).toContain('aria-label="Active lead categories"')
+    expect(html).toContain('aria-label="Outcome lead categories"')
     expect(html).toContain("Hold Buyer")
-    expect(html).not.toContain(">New<")
-    expect(html).not.toContain("New Buyer")
+    expect(html).toContain("Archived Buyer")
+    expect(html).not.toContain("Ready Buyer")
+  })
+
+  it("drops stale selected ids when the board data changes", () => {
+    expect(reconcileSelectedLeadIds(["lead-ready", "lead-archived"], ["lead-ready"])).toEqual([
+      "lead-ready"
+    ])
+    expect(reconcileSelectedLeadIds(["missing-lead"], ["lead-ready", "lead-hold"])).toEqual([])
+  })
+
+  it("clears stale component selection when a selected lead leaves and re-enters the board", async () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const readyLead = buildLead({
+      id: "lead-ready",
+      buyerName: "Ready Buyer",
+      pipelineStage: "ready_to_show",
+      recommendation: "show"
+    })
+    const holdLead = buildLead({
+      id: "lead-hold",
+      buyerName: "Hold Buyer",
+      pipelineStage: "hold",
+      recommendation: "hold"
+    })
+
+    await act(async () => {
+      root.render(
+        <LeadsManager leads={[readyLead, holdLead]} activeTab="ready_to_show" outcomeTab="closed_won" />
+      )
+    })
+
+    const readyCheckbox = container.querySelector(
+      'input[aria-label="Select Ready Buyer"]'
+    ) as HTMLInputElement | null
+
+    expect(readyCheckbox).not.toBeNull()
+
+    await act(async () => {
+      readyCheckbox?.click()
+    })
+
+    expect(container.textContent).toContain("1 selected")
+    expect(container.querySelector('input[name="leadId"][value="lead-ready"]')).not.toBeNull()
+
+    await act(async () => {
+      root.render(<LeadsManager leads={[holdLead]} activeTab="hold" outcomeTab="closed_won" />)
+    })
+
+    expect(container.textContent).not.toContain("selected")
+    expect(container.querySelector('input[name="leadId"][value="lead-ready"]')).toBeNull()
+
+    await act(async () => {
+      root.render(
+        <LeadsManager leads={[readyLead, holdLead]} activeTab="ready_to_show" outcomeTab="closed_won" />
+      )
+    })
+
+    const readyCheckboxAgain = container.querySelector(
+      'input[aria-label="Select Ready Buyer"]'
+    ) as HTMLInputElement | null
+
+    expect(readyCheckboxAgain?.checked).toBe(false)
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
   })
 })

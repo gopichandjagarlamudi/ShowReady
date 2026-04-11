@@ -4,6 +4,19 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Replaced the `/leads` side-by-side pipeline board with tab-driven full-width sections: `apps/web/app/leads/page.tsx` now reads `active` / `outcome` search params, `apps/web/components/leads-manager.tsx` renders separate active and outcome tab rails with `Ready to show` as the default active workspace, and `new` leads are now surfaced as a lightweight `/new-leads` review cue instead of a visible pipeline column.
+- Kept the persistent lead-card footer action bar inside the new full-width sections, limited desktop density to two cards per row, preserved single-column mobile cards, and kept the mobile tab rails horizontally swipeable without reverting to page-level multi-column board behavior.
+- Expanded `apps/web/components/leads-manager.test.tsx` to cover the tabbed-section defaults, separate outcome rail, hidden off-tab sections, `/new-leads` cue, and the existing stale-selection reconciliation behavior, then re-verified with `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx`, `corepack pnpm --filter @showready/web test -- lib/lead-stage.test.ts`, and `corepack pnpm --filter @showready/web typecheck`.
+- Reworked `/leads` again around the approved action-bar UX: every board card in `apps/web/components/leads-manager.tsx` now keeps a persistent footer with an always-visible category dropdown plus a quiet overflow menu, summary copy is removed from board cards, and the top bulk toolbar stays hidden until at least one lead is selected.
+- Added `reconcileSelectedLeadIds()` in `apps/web/components/leads-manager.tsx` so local selection state is intersected with the live `leads` prop after board changes, preventing stale selections from lingering after moves or deletes and keeping bulk-delete submissions aligned with the current board.
+- Tightened the leads-board coverage in `apps/web/components/leads-manager.test.tsx` by replacing brittle Tailwind/string assertions with behavior-focused checks for compact metadata, disabled `new`-stage board controls, and stale-selection reconciliation, while the shared dropdown helper coverage in `apps/web/lib/lead-stage.test.ts` remains in place.
+- Verified the redesign with `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx`, `corepack pnpm --filter @showready/web test -- lib/lead-stage.test.ts`, `corepack pnpm --filter @showready/web typecheck`, and a live browser pass on local `/leads` confirming the persistent footer controls, hidden-by-default bulk toolbar, and quiet overflow actions.
+- Fixed a leads-board readability regression on `/leads`: the pipeline cards were forcing a three-column metadata grid based on viewport width instead of available column width, which caused stage/date text to collapse into vertical stacks inside the narrow five-column board. The board cards in `apps/web/components/leads-manager.tsx` now use a two-column metadata layout with the updated timestamp spanning the full row, plus stronger wrapping rules on buyer name/email text.
+- Replaced the lead-stage contract end to end with the new eight-stage pipeline: `new`, `ready_to_show`, `appointment_booked`, `nurture`, `hold`, `closed_won`, `closed_lost`, and `archived`, including shared types, Supabase `Database` bindings, stage-label/tone helpers, dashboard analytics cards, seed defaults, API payload unions, and the base SQL enum in `packages/db/migrations/0000_showready_phase1.sql`.
+- Added appointments v1 across the data model and product surface: `packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql` plus `packages/db/src/schema.ts` now define `appointments` and `showings`, `apps/web/lib/supabase/data.ts` / `apps/web/lib/actions.ts` now support listing, creating, editing, and status-changing appointments, and the new top-level `/appointments` route plus lead-detail appointments panel now expose the workflow in the UI.
+- Reworked `/leads` into the approved split board with pipeline and outcome rows, made stage badges the primary lead-card status treatment, added the `Appointments` nav destination, and shipped the shared `AppointmentForm` with ordered showing rows plus the requested stage-color mapping.
+- Made the new migration path resilient to drifted Supabase projects by having `0005` tolerate missing `reviewed_stage` / `reviewed_at` columns before creating appointments, then applied `packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql` to the connected Supabase project after discovering the live schema had not fully received `0004`.
+- Verified the implementation with targeted Vitest coverage for stage helpers, appointments helpers, lead/appointments UI surfaces, `corepack pnpm --filter @showready/web typecheck`, `corepack pnpm typecheck`, `corepack pnpm --filter @showready/db test -- tests/lead-stage-appointments-migration.test.ts`, and a live local browser pass that signed into the demo account, loaded `/leads`, `/appointments`, and lead detail, created a real appointment, confirmed the lead auto-moved to `appointment_booked`, and cleared the new-form accessibility warnings.
 - Reworked lead qualification into a suggest-first review workflow: completed intakes now stay in `pipeline_stage = new` after scoring, the app persists the score and recommendation immediately, and agents must confirm or override the suggested category before a lead enters the active pipeline.
 - Added a dedicated `/new-leads` review inbox with one-tap `Confirm suggestion` plus direct `Move to Ready / Nurture / Hold` actions, and updated the shared app-shell navigation so `New Leads` is a first-class destination on desktop and mobile.
 - Added persistent review metadata to the lead contract via `reviewed_stage` and `reviewed_at`, exposed shared `lead.review` helpers in `@showready/types`, and added `packages/db/migrations/0004_lead_review_inbox.sql` to backfill reviewed history for existing non-`new` leads.
@@ -83,9 +96,15 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `apps/web/app/new-leads/page.tsx`
 - `apps/web/components/new-leads-inbox.tsx`
 - `apps/web/components/new-leads-inbox.test.tsx`
+- `apps/web/components/appointment-form.tsx`
+- `apps/web/components/appointments-manager.tsx`
+- `apps/web/components/appointments-manager.test.tsx`
+- `apps/web/components/lead-appointments-panel.tsx`
+- `apps/web/components/lead-appointments-panel.test.tsx`
 - `apps/web/components/leads-manager.tsx`
 - `apps/web/components/leads-manager.test.tsx`
 - `apps/web/vitest.config.ts`
+- `apps/web/app/appointments/page.tsx`
 - `apps/web/app/dashboard/page.tsx`
 - `apps/web/app/intake/[token]/page.tsx`
 - `apps/web/app/api/intake/[token]/*`
@@ -98,8 +117,12 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `apps/web/app/(auth)/register/page.tsx`
 - `apps/web/app/(auth)/login/page.tsx`
 - `apps/web/lib/intake-guards.ts`
+- `apps/web/lib/appointments.ts`
+- `apps/web/lib/appointments.test.ts`
 - `apps/web/lib/lead-review.ts`
 - `apps/web/lib/lead-review.test.ts`
+- `apps/web/lib/lead-stage.ts`
+- `apps/web/lib/lead-stage.test.ts`
 - `proxy.ts`
 - `apps/web/lib/actions.ts`
 - `apps/web/lib/session.ts`
@@ -112,14 +135,16 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `packages/db/migrations/0001_sale_rental_intake.sql`
 - `packages/db/migrations/0002_magic_link_invites.sql`
 - `packages/db/migrations/0004_lead_review_inbox.sql`
+- `packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql`
 - `packages/types/src/index.ts`
 - `packages/scoring/src/index.ts`
 - `apps/web/scripts/seed-supabase.ts`
 
 ## Open Issues / Loose Ends
-- The new review-inbox workflow has unit/component coverage and workspace typecheck only; authenticated browser verification of `/new-leads`, its review actions, and the updated lead-detail flow is still blocked by the existing local `/auth/login` redirect bounce.
-- Any Supabase environment that should use the new review workflow must apply `packages/db/migrations/0004_lead_review_inbox.sql`; without it, `reviewed_stage` / `reviewed_at` will be missing and existing reviewed leads will not get backfilled history.
-- Browser verification of the local agent-authenticated dashboard and lead-detail surfaces is still blocked by the current `/auth/login` redirect bounce back to `/login`; the new lead-detail stage-control change was verified with targeted Vitest coverage and typecheck only, while `apps/web/tests/e2e/dashboard-invite.spec.ts` remains skipped until the local auth redirect loop is fixed or replaced with a reliable authenticated setup path.
+- Any Supabase environment that should use the refreshed pipeline and appointments workflow must apply `packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql`; the migration now self-heals missing review columns, but the new `/appointments` route and `appointment_booked` stage contract still require that upgrade to exist in the connected project.
+- The appointments and split-board changes now have manual browser verification, but there is still no dedicated Playwright coverage for creating/editing appointments, status changes, or verifying the auto-move into `appointment_booked`.
+- The `/leads` board readability fix currently has targeted component coverage and a manual browser check on the authenticated local page; there is still no visual regression coverage for narrow desktop board columns beyond the static markup assertion in `apps/web/components/leads-manager.test.tsx`.
+- `/new-leads` itself still has no authenticated browser regression even though local sign-in now works again; the review-first workflow remains covered by targeted Vitest plus shared typecheck rather than end-to-end automation.
 - Preview deployments protected by Vercel Authentication still return `HTTP 500` on browser `POST /auth/register` before runtime code executes, even after the app-side share-token preservation fix; this appears to be a platform protection constraint rather than an app runtime exception.
 - Google OAuth reaches the live Google sign-in screen with the correct production callback, but a full callback completion still requires entering a real Google account in the browser.
 - Email/password signup now works on production while Supabase email confirmation remains disabled; if confirmations are re-enabled, the previous email-send rate-limit constraint is expected to return unless Auth email delivery is reconfigured.
@@ -145,7 +170,7 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 2. Run `git status`.
 3. Verify whether the target Supabase project env vars are present locally.
 4. Skim `README.md`, `proxy.ts`, `apps/web/lib/intake-config.ts`, `apps/web/lib/supabase`, and the closest app route files.
-5. If the task involves real runtime verification, ensure `packages/db/migrations/0000_showready_phase1.sql`, `packages/db/migrations/0001_sale_rental_intake.sql`, `packages/db/migrations/0002_magic_link_invites.sql`, `packages/db/migrations/0003_repair_auth_user_scaffold.sql`, and `packages/db/migrations/0004_lead_review_inbox.sql` have been applied, then run `corepack pnpm --filter @showready/web seed:supabase`.
+5. If the task involves real runtime verification, ensure `packages/db/migrations/0000_showready_phase1.sql`, `packages/db/migrations/0001_sale_rental_intake.sql`, `packages/db/migrations/0002_magic_link_invites.sql`, `packages/db/migrations/0003_repair_auth_user_scaffold.sql`, `packages/db/migrations/0004_lead_review_inbox.sql`, and `packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql` have been applied, then run `corepack pnpm --filter @showready/web seed:supabase`.
 
 ## How Future Codex Threads Should Start
 - Start with `AGENTS.md`.
@@ -167,4 +192,5 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - This thread also replaced the dashboard lead-creation assumption with the invite-first intake architecture, rewired autosave/submit around invite conversion, and verified the buyer and rental public invite flows end to end in Playwright after reseeding the Supabase demo data.
 - This thread also found that the connected Supabase project was still running a stale `public.handle_new_user()` trigger function from before `question_templates.intake_type` became required; applying `packages/db/migrations/0003_repair_auth_user_scaffold.sql` repaired the live function and restored new-user creation.
 - This thread also changed the lead workflow from score-and-auto-file to score-and-review: submitted leads now land in `/new-leads`, and agents must confirm or override the suggested category before the lead enters the pipeline.
+- This thread also replaced the old five-stage lead contract with the new eight-stage pipeline, added a dedicated `/appointments` management surface backed by real Supabase `appointments` and `showings` tables, and verified the key auto-transition by creating a live appointment that moved a lead into `appointment_booked`.
 - Future threads should not assume the old mock JSON store is still on the active request path.

@@ -36,7 +36,15 @@ export async function PATCH(
   try {
     const supabase = await createSupabaseServerClient()
     const payload = (await request.json()) as
-      | { pipelineStage: "new" | "ready" | "nurture" | "hold" | "closed" }
+      | {
+          pipelineStage:
+            | "ready_to_show"
+            | "nurture"
+            | "hold"
+            | "closed_won"
+            | "closed_lost"
+            | "archived"
+        }
       | { overrideScore: number; note: string };
 
     if ("pipelineStage" in payload) {

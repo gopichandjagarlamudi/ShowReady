@@ -1,11 +1,20 @@
 export type LeadStatus = "pending" | "submitted" | "archived"
-export type LeadStage = "new" | "ready" | "nurture" | "hold" | "closed"
+export type LeadStage =
+  | "new"
+  | "ready_to_show"
+  | "appointment_booked"
+  | "nurture"
+  | "hold"
+  | "closed_won"
+  | "closed_lost"
+  | "archived"
 export type Recommendation = "show" | "nurture" | "hold"
 export type RecommendationTone = Recommendation
 export type NotificationPreference = "email" | "email_and_push"
 export type IntakeType = "sale" | "rental"
 export type IntakeIntent = "buy" | "rent"
 export type InviteStatus = "generated" | "opened" | "converted" | "expired"
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled"
 
 export type BuyerPurchaseGoal = "myself" | "investment" | "not_sure"
 export type BuyerTimeline =
@@ -242,6 +251,31 @@ export type Lead = {
   scoreBreakdown?: ScoreBreakdown
   scoreOverride?: ScoreOverride
   review?: LeadReview
+}
+
+export type Showing = {
+  id: string
+  appointmentId: string
+  address: string
+  orderIndex: number
+  notes?: string
+}
+
+export type AppointmentLeadSummary = Pick<
+  Lead,
+  "id" | "buyerName" | "buyerPhone" | "buyerEmail" | "pipelineStage"
+>
+
+export type Appointment = {
+  id: string
+  leadId: string
+  date: string
+  startTime: string
+  status: AppointmentStatus
+  notes?: string
+  createdAt: string
+  lead: AppointmentLeadSummary
+  showings: Showing[]
 }
 
 export type Invite = {
@@ -625,6 +659,7 @@ export function getQuestionLabel(questionKey: string): string {
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "layout-dashboard" },
   { href: "/new-leads", label: "New Leads", icon: "inbox" },
+  { href: "/appointments", label: "Appointments", icon: "calendar-days" },
   { href: "/leads", label: "Leads", icon: "users" },
   { href: "/settings", label: "Settings", icon: "settings-2" }
 ]

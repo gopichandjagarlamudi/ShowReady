@@ -7,7 +7,7 @@ export function getSuggestedStage(
     return undefined
   }
 
-  return recommendation === "show" ? "ready" : recommendation
+  return recommendation === "show" ? "ready_to_show" : recommendation
 }
 
 export function getLeadReviewState(input: {

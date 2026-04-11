@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Inbox, LayoutDashboard, Settings2, Users } from "lucide-react";
+import { CalendarDays, Inbox, LayoutDashboard, Settings2, Users } from "lucide-react";
 import { NAVIGATION_ITEMS } from "@showready/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { logoutAction } from "@/lib/actions";
 
 const iconMap = {
   inbox: Inbox,
+  "calendar-days": CalendarDays,
   "layout-dashboard": LayoutDashboard,
   users: Users,
   "settings-2": Settings2
@@ -25,7 +26,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-dvh bg-[color:var(--bg)]">
+    <div className="min-h-dvh overflow-x-hidden bg-[color:var(--bg)]">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-white focus:px-4 focus:py-2"
@@ -69,7 +70,7 @@ export function AppShell({
             </Button>
           </form>
         </aside>
-        <div className="flex min-h-dvh flex-col">
+        <div className="flex min-h-dvh min-w-0 flex-col">
           <header className="sticky top-0 z-30 border-b border-[color:var(--border)] bg-[color:var(--bg)]/85 px-5 py-4 backdrop-blur lg:px-10">
             <div className="flex items-start justify-between gap-6">
               <div>
@@ -84,7 +85,7 @@ export function AppShell({
               </div>
             </div>
           </header>
-          <main id="main-content" className="flex-1 px-5 py-6 lg:px-10 lg:py-10">
+          <main id="main-content" className="min-w-0 flex-1 px-5 py-6 lg:px-10 lg:py-10">
             {children}
           </main>
           <nav

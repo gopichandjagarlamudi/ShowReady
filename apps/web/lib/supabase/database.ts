@@ -92,10 +92,27 @@ export type Database = {
           token: string
           token_expires_at: string
           status: "pending" | "submitted" | "archived"
-          pipeline_stage: "new" | "ready" | "nurture" | "hold" | "closed"
+          pipeline_stage:
+            | "new"
+            | "ready_to_show"
+            | "appointment_booked"
+            | "nurture"
+            | "hold"
+            | "closed_won"
+            | "closed_lost"
+            | "archived"
           score: number | null
           recommendation: "show" | "nurture" | "hold" | null
-          reviewed_stage: "new" | "ready" | "nurture" | "hold" | "closed" | null
+          reviewed_stage:
+            | "new"
+            | "ready_to_show"
+            | "appointment_booked"
+            | "nurture"
+            | "hold"
+            | "closed_won"
+            | "closed_lost"
+            | "archived"
+            | null
           reviewed_at: string | null
           summary: string | null
           submitted_at: string | null
@@ -112,10 +129,27 @@ export type Database = {
           token: string
           token_expires_at: string
           status?: "pending" | "submitted" | "archived"
-          pipeline_stage?: "new" | "ready" | "nurture" | "hold" | "closed"
+          pipeline_stage?:
+            | "new"
+            | "ready_to_show"
+            | "appointment_booked"
+            | "nurture"
+            | "hold"
+            | "closed_won"
+            | "closed_lost"
+            | "archived"
           score?: number | null
           recommendation?: "show" | "nurture" | "hold" | null
-          reviewed_stage?: "new" | "ready" | "nurture" | "hold" | "closed" | null
+          reviewed_stage?:
+            | "new"
+            | "ready_to_show"
+            | "appointment_booked"
+            | "nurture"
+            | "hold"
+            | "closed_won"
+            | "closed_lost"
+            | "archived"
+            | null
           reviewed_at?: string | null
           summary?: string | null
           submitted_at?: string | null
@@ -201,12 +235,60 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["lead_scores"]["Insert"]>
         Relationships: []
       }
+      appointments: {
+        Row: {
+          id: string
+          lead_id: string
+          date: string
+          start_time: string
+          status: "scheduled" | "completed" | "cancelled"
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          date: string
+          start_time: string
+          status?: "scheduled" | "completed" | "cancelled"
+          notes?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["appointments"]["Insert"]>
+        Relationships: []
+      }
+      showings: {
+        Row: {
+          id: string
+          appointment_id: string
+          address: string
+          order_index: number
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          appointment_id: string
+          address: string
+          order_index: number
+          notes?: string | null
+        }
+        Update: Partial<Database["public"]["Tables"]["showings"]["Insert"]>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
     Enums: {
       lead_status: "pending" | "submitted" | "archived"
-      lead_stage: "new" | "ready" | "nurture" | "hold" | "closed"
+      lead_stage:
+        | "new"
+        | "ready_to_show"
+        | "appointment_booked"
+        | "nurture"
+        | "hold"
+        | "closed_won"
+        | "closed_lost"
+        | "archived"
       recommendation: "show" | "nurture" | "hold"
       notification_preference: "email" | "email_and_push"
       intake_type: "sale" | "rental"

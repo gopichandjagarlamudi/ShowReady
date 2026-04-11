@@ -2,6 +2,8 @@ import "server-only"
 
 import { randomUUID } from "node:crypto"
 import {
+  type Appointment,
+  type AppointmentStatus,
   canCreateLeadFromDraft,
   getDefaultTemplateForIntakeType,
   getQuestionLabel,
@@ -15,12 +17,12 @@ import {
   type IntakeType,
   type Invite,
   type Lead,
-  type LeadReview,
   type LeadStage,
   type QuestionTemplate,
   type Recommendation,
   type ScoreOverride,
-  type ScoreBreakdown
+  type ScoreBreakdown,
+  type Showing
 } from "@showready/types"
 import { scoreLead } from "@showready/scoring"
 import type { SupabaseClient, User } from "@supabase/supabase-js"
@@ -41,6 +43,7 @@ import {
   resolveTemplateForIntakeType
 } from "@/lib/intake-config"
 import { getLeadReviewState, getSuggestedStage } from "@/lib/lead-review"
+import { canCreateAppointmentForLead, normalizeShowingsInput } from "@/lib/appointments"
 
 type AppSupabaseClient = SupabaseClient<Database>
 
@@ -70,11 +73,22 @@ type SubmitInviteInput = {
   draft: IntakeDraft
 }
 
+type AppointmentInput = {
+  leadId: string
+  date: string
+  startTime: string
+  notes?: string
+  showings: {
+    address: string
+    notes?: string
+  }[]
+}
+
 function nowIso() {
   return new Date().toISOString()
 }
 
-function requireData<T>(value: T | null, message: string): T {
+function requireData<T>(value: T | null | undefined, message: string): T {
   if (!value) {
     throw new Error(message)
   }
@@ -312,6 +326,51 @@ function mapInvite(
   }
 }
 
+function mapAppointmentLeadSummary(
+  row: Database["public"]["Tables"]["leads"]["Row"]
+): Appointment["lead"] {
+  return {
+    id: row.id,
+    buyerName: row.buyer_name,
+    buyerPhone: row.buyer_phone ?? undefined,
+    buyerEmail: row.buyer_email ?? undefined,
+    pipelineStage: row.pipeline_stage
+  }
+}
+
+function mapShowing(
+  row: Database["public"]["Tables"]["showings"]["Row"]
+): Showing {
+  return {
+    id: row.id,
+    appointmentId: row.appointment_id,
+    address: row.address,
+    orderIndex: row.order_index,
+    notes: row.notes ?? undefined
+  }
+}
+
+function mapAppointment(
+  row: Database["public"]["Tables"]["appointments"]["Row"],
+  lead: Database["public"]["Tables"]["leads"]["Row"],
+  showingRows: Database["public"]["Tables"]["showings"]["Row"][]
+): Appointment {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    date: row.date,
+    startTime: row.start_time,
+    status: row.status,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    lead: mapAppointmentLeadSummary(lead),
+    showings: showingRows
+      .slice()
+      .sort((left, right) => left.order_index - right.order_index)
+      .map((showing) => mapShowing(showing))
+  }
+}
+
 export async function ensureAgentScaffold(
   adminClient: AppSupabaseClient,
   user: User
@@ -454,6 +513,144 @@ export async function listLeads(
   return (data ?? []).map((row) => mapLead(row))
 }
 
+export async function listEligibleLeadsForAppointments(
+  client: AppSupabaseClient,
+  agentId: string
+) {
+  const leads = await listLeads(client, agentId)
+
+  return leads.filter((lead) => canCreateAppointmentForLead(lead.pipelineStage))
+}
+
+export async function listAppointments(
+  client: AppSupabaseClient,
+  agentId: string,
+  status: AppointmentStatus
+) {
+  const { data: leadRows, error: leadError } = await client
+    .from("leads")
+    .select("*")
+    .eq("agent_id", agentId)
+
+  if (leadError) {
+    throw leadError
+  }
+
+  const leads = leadRows ?? []
+  if (leads.length === 0) {
+    return []
+  }
+
+  const leadIds = leads.map((lead) => lead.id)
+  const { data: appointmentRows, error: appointmentError } = await client
+    .from("appointments")
+    .select("*")
+    .eq("status", status)
+    .in("lead_id", leadIds)
+    .order("date", { ascending: status === "scheduled" })
+    .order("start_time", { ascending: status === "scheduled" })
+    .order("created_at", { ascending: false })
+
+  if (appointmentError) {
+    throw appointmentError
+  }
+
+  const appointments = appointmentRows ?? []
+  if (appointments.length === 0) {
+    return []
+  }
+
+  const appointmentIds = appointments.map((appointment) => appointment.id)
+  const { data: showingRows, error: showingError } = await client
+    .from("showings")
+    .select("*")
+    .in("appointment_id", appointmentIds)
+    .order("order_index", { ascending: true })
+
+  if (showingError) {
+    throw showingError
+  }
+
+  const leadMap = new Map<string, Database["public"]["Tables"]["leads"]["Row"]>(
+    leads.map((lead) => [lead.id, lead])
+  )
+  const showingMap = new Map<string, Database["public"]["Tables"]["showings"]["Row"][]>()
+
+  for (const showing of showingRows ?? []) {
+    const current = showingMap.get(showing.appointment_id) ?? []
+    current.push(showing)
+    showingMap.set(showing.appointment_id, current)
+  }
+
+  return appointments.map((appointment) =>
+    mapAppointment(
+      appointment,
+      requireData(leadMap.get(appointment.lead_id), "Appointment lead not found."),
+      showingMap.get(appointment.id) ?? []
+    )
+  )
+}
+
+export async function listAppointmentsForLead(
+  client: AppSupabaseClient,
+  agentId: string,
+  leadId: string
+) {
+  const { data: lead, error: leadError } = await client
+    .from("leads")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("id", leadId)
+    .maybeSingle()
+
+  if (leadError) {
+    throw leadError
+  }
+
+  if (!lead) {
+    return []
+  }
+
+  const { data: appointmentRows, error: appointmentError } = await client
+    .from("appointments")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true })
+    .order("created_at", { ascending: false })
+
+  if (appointmentError) {
+    throw appointmentError
+  }
+
+  const appointments = appointmentRows ?? []
+  if (appointments.length === 0) {
+    return []
+  }
+
+  const appointmentIds = appointments.map((appointment) => appointment.id)
+  const { data: showingRows, error: showingError } = await client
+    .from("showings")
+    .select("*")
+    .in("appointment_id", appointmentIds)
+    .order("order_index", { ascending: true })
+
+  if (showingError) {
+    throw showingError
+  }
+
+  const showingMap = new Map<string, Database["public"]["Tables"]["showings"]["Row"][]>()
+  for (const showing of showingRows ?? []) {
+    const current = showingMap.get(showing.appointment_id) ?? []
+    current.push(showing)
+    showingMap.set(showing.appointment_id, current)
+  }
+
+  return appointments.map((appointment) =>
+    mapAppointment(appointment, lead, showingMap.get(appointment.id) ?? [])
+  )
+}
+
 export async function listNewLeadsForReview(
   client: AppSupabaseClient,
   agentId: string
@@ -565,6 +762,244 @@ export async function getLeadById(
   }
 
   return mapLead(lead, answerRows ?? [], scoreRows?.[0])
+}
+
+export async function createAppointment(
+  client: AppSupabaseClient,
+  agentId: string,
+  input: AppointmentInput
+) {
+  const normalizedShowings = normalizeShowingsInput(input.showings)
+  if (normalizedShowings.length === 0) {
+    throw new Error("Add at least one showing before saving the appointment.")
+  }
+
+  const { data: lead, error: leadError } = await client
+    .from("leads")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("id", input.leadId)
+    .maybeSingle()
+
+  if (leadError) {
+    throw leadError
+  }
+
+  const leadRow = requireData(lead, "Lead not found.")
+  if (!canCreateAppointmentForLead(leadRow.pipeline_stage)) {
+    throw new Error("Appointments can only be created for ready, nurture, or hold leads.")
+  }
+
+  const { data: existingScheduled, error: existingError } = await client
+    .from("appointments")
+    .select("*")
+    .eq("lead_id", input.leadId)
+    .eq("status", "scheduled")
+    .maybeSingle()
+
+  if (existingError) {
+    throw existingError
+  }
+
+  if (existingScheduled) {
+    throw new Error("This lead already has a scheduled appointment.")
+  }
+
+  const { data: appointment, error: appointmentError } = await client
+    .from("appointments")
+    .insert({
+      lead_id: input.leadId,
+      date: input.date,
+      start_time: input.startTime,
+      status: "scheduled",
+      notes: input.notes?.trim() || null
+    })
+    .select("*")
+    .single()
+
+  if (appointmentError) {
+    throw appointmentError
+  }
+
+  const { error: showingError } = await client.from("showings").insert(
+    normalizedShowings.map((showing) => ({
+      appointment_id: appointment.id,
+      address: showing.address,
+      order_index: showing.orderIndex,
+      notes: showing.notes ?? null
+    }))
+  )
+
+  if (showingError) {
+    throw showingError
+  }
+
+  const { data: updatedLead, error: leadUpdateError } = await client
+    .from("leads")
+    .update({
+      pipeline_stage: "appointment_booked",
+      updated_at: nowIso()
+    })
+    .eq("agent_id", agentId)
+    .eq("id", input.leadId)
+    .select("*")
+    .single()
+
+  if (leadUpdateError) {
+    throw leadUpdateError
+  }
+
+  const { data: showingRows, error: insertedShowingsError } = await client
+    .from("showings")
+    .select("*")
+    .eq("appointment_id", appointment.id)
+    .order("order_index", { ascending: true })
+
+  if (insertedShowingsError) {
+    throw insertedShowingsError
+  }
+
+  return mapAppointment(appointment, updatedLead, showingRows ?? [])
+}
+
+export async function updateAppointment(
+  client: AppSupabaseClient,
+  agentId: string,
+  appointmentId: string,
+  input: Omit<AppointmentInput, "leadId">
+) {
+  const normalizedShowings = normalizeShowingsInput(input.showings)
+  if (normalizedShowings.length === 0) {
+    throw new Error("Add at least one showing before saving the appointment.")
+  }
+
+  const { data: appointment, error: appointmentLookupError } = await client
+    .from("appointments")
+    .select("*")
+    .eq("id", appointmentId)
+    .maybeSingle()
+
+  if (appointmentLookupError) {
+    throw appointmentLookupError
+  }
+
+  const appointmentRow = requireData(appointment, "Appointment not found.")
+  const { data: lead, error: leadError } = await client
+    .from("leads")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("id", appointmentRow.lead_id)
+    .maybeSingle()
+
+  if (leadError) {
+    throw leadError
+  }
+
+  const leadRow = requireData(lead, "Lead not found.")
+
+  const { data: updatedAppointment, error: updateError } = await client
+    .from("appointments")
+    .update({
+      date: input.date,
+      start_time: input.startTime,
+      notes: input.notes?.trim() || null
+    })
+    .eq("id", appointmentId)
+    .select("*")
+    .single()
+
+  if (updateError) {
+    throw updateError
+  }
+
+  const { error: deleteShowingsError } = await client
+    .from("showings")
+    .delete()
+    .eq("appointment_id", appointmentId)
+
+  if (deleteShowingsError) {
+    throw deleteShowingsError
+  }
+
+  const { error: insertShowingsError } = await client.from("showings").insert(
+    normalizedShowings.map((showing) => ({
+      appointment_id: appointmentId,
+      address: showing.address,
+      order_index: showing.orderIndex,
+      notes: showing.notes ?? null
+    }))
+  )
+
+  if (insertShowingsError) {
+    throw insertShowingsError
+  }
+
+  const { data: showingRows, error: showingRowsError } = await client
+    .from("showings")
+    .select("*")
+    .eq("appointment_id", appointmentId)
+    .order("order_index", { ascending: true })
+
+  if (showingRowsError) {
+    throw showingRowsError
+  }
+
+  return mapAppointment(updatedAppointment, leadRow, showingRows ?? [])
+}
+
+export async function updateAppointmentStatus(
+  client: AppSupabaseClient,
+  agentId: string,
+  appointmentId: string,
+  status: AppointmentStatus
+) {
+  const { data: appointment, error: appointmentLookupError } = await client
+    .from("appointments")
+    .select("*")
+    .eq("id", appointmentId)
+    .maybeSingle()
+
+  if (appointmentLookupError) {
+    throw appointmentLookupError
+  }
+
+  const appointmentRow = requireData(appointment, "Appointment not found.")
+  const { data: lead, error: leadError } = await client
+    .from("leads")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("id", appointmentRow.lead_id)
+    .maybeSingle()
+
+  if (leadError) {
+    throw leadError
+  }
+
+  const leadRow = requireData(lead, "Lead not found.")
+  const { data: updatedAppointment, error: updateError } = await client
+    .from("appointments")
+    .update({
+      status
+    })
+    .eq("id", appointmentId)
+    .select("*")
+    .single()
+
+  if (updateError) {
+    throw updateError
+  }
+
+  const { data: showingRows, error: showingRowsError } = await client
+    .from("showings")
+    .select("*")
+    .eq("appointment_id", appointmentId)
+    .order("order_index", { ascending: true })
+
+  if (showingRowsError) {
+    throw showingRowsError
+  }
+
+  return mapAppointment(updatedAppointment, leadRow, showingRows ?? [])
 }
 
 export async function createLead(
@@ -709,7 +1144,7 @@ export async function reviewLead(
   client: AppSupabaseClient,
   agentId: string,
   leadId: string,
-  pipelineStage: Extract<LeadStage, "ready" | "nurture" | "hold">
+  pipelineStage: Extract<LeadStage, "ready_to_show" | "nurture" | "hold">
 ) {
   const reviewedAt = nowIso()
   const { data, error } = await client
@@ -918,7 +1353,8 @@ export async function getAnalyticsSummary(
   }
 
   const leads = data ?? []
-  const ready = leads.filter((lead) => lead.pipeline_stage === "ready").length
+  const readyToShow = leads.filter((lead) => lead.pipeline_stage === "ready_to_show").length
+  const appointmentBooked = leads.filter((lead) => lead.pipeline_stage === "appointment_booked").length
   const nurture = leads.filter((lead) => lead.pipeline_stage === "nurture").length
   const hold = leads.filter((lead) => lead.pipeline_stage === "hold").length
   const scored = leads.filter((lead) => typeof lead.score === "number")
@@ -928,7 +1364,8 @@ export async function getAnalyticsSummary(
 
   return {
     totalLeads: leads.length,
-    ready,
+    readyToShow,
+    appointmentBooked,
     nurture,
     hold,
     averageScore: Number.parseFloat(averageScore.toFixed(2))

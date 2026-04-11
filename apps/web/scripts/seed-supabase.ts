@@ -305,7 +305,7 @@ async function seedLeadData(
         token_expires_at: "2099-01-01T00:00:00.000Z",
         status: "submitted",
         pipeline_stage:
-          scored.recommendation === "show" ? "ready" : scored.recommendation,
+          scored.recommendation === "show" ? "ready_to_show" : scored.recommendation,
         score: scored.total,
         recommendation: scored.recommendation,
         summary: scored.summary,

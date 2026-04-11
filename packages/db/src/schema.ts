@@ -1,12 +1,16 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
+  date,
   index,
+  integer,
   jsonb,
   numeric,
   pgEnum,
   pgSchema,
   pgTable,
   text,
+  time,
   timestamp,
   uniqueIndex,
   uuid
@@ -20,10 +24,13 @@ export const leadStatusEnum = pgEnum("lead_status", [
 
 export const leadStageEnum = pgEnum("lead_stage", [
   "new",
-  "ready",
+  "ready_to_show",
+  "appointment_booked",
   "nurture",
   "hold",
-  "closed"
+  "closed_won",
+  "closed_lost",
+  "archived"
 ]);
 
 export const recommendationEnum = pgEnum("recommendation", [
@@ -245,5 +252,51 @@ export const leadScores = pgTable(
   },
   (table) => ({
     leadIdIdx: index("lead_scores_lead_id_idx").on(table.leadId)
+  })
+);
+
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, {
+        onDelete: "cascade"
+      }),
+    date: date("date").notNull(),
+    startTime: time("start_time").notNull(),
+    status: text("status").default("scheduled").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => ({
+    leadIdIdx: index("appointments_lead_id_idx").on(table.leadId),
+    leadDateIdx: index("appointments_date_start_time_idx").on(table.date, table.startTime),
+    scheduledLeadUnique: uniqueIndex("appointments_lead_id_scheduled_unique")
+      .on(table.leadId)
+      .where(sql`${table.status} = 'scheduled'`)
+  })
+);
+
+export const showings = pgTable(
+  "showings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    appointmentId: uuid("appointment_id")
+      .notNull()
+      .references(() => appointments.id, {
+        onDelete: "cascade"
+      }),
+    address: text("address").notNull(),
+    orderIndex: integer("order_index").notNull(),
+    notes: text("notes")
+  },
+  (table) => ({
+    appointmentIdIdx: index("showings_appointment_id_idx").on(table.appointmentId),
+    appointmentOrderUnique: uniqueIndex("showings_appointment_id_order_index_unique").on(
+      table.appointmentId,
+      table.orderIndex
+    )
   })
 );

@@ -1,27 +1,22 @@
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { LeadAppointmentsPanel } from "@/components/lead-appointments-panel";
 import { ScoreRing } from "@/components/score-ring";
-import { RecommendationBadge } from "@/components/ui/badge";
+import { RecommendationBadge, StageBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { buildAppUrl, formatDate } from "@/lib/utils";
 import { flattenDraftAnswers } from "@/lib/intake-draft";
-import { getLeadDetailMoveTargets } from "@/lib/lead-stage";
+import { getLeadDetailMoveTargets, getLeadStageLabel, REVIEW_STAGE_OPTIONS } from "@/lib/lead-stage";
 import { getSuggestedStage } from "@/lib/lead-review";
 import { getCurrentAgentContext } from "@/lib/session";
 import { overrideLeadScoreAction, reviewLeadAction, updateLeadStageAction } from "@/lib/actions";
-import { getLeadById } from "@/lib/supabase/data";
+import { getLeadById, listAppointmentsForLead } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatIntakeTypeLabel } from "@/lib/intake-config";
 import { getQuestionLabel } from "@showready/types";
-
-const REVIEW_STAGE_LABELS = {
-  ready: "Ready",
-  nurture: "Nurture",
-  hold: "Hold"
-} as const
 
 export default async function LeadDetailPage({
   params
@@ -44,6 +39,7 @@ export default async function LeadDetailPage({
   const moveTargets = getLeadDetailMoveTargets(lead.pipelineStage)
   const suggestedStage = getSuggestedStage(lead.recommendation)
   const isPendingReview = lead.pipelineStage === "new"
+  const appointments = await listAppointmentsForLead(supabase, context.agent.id, leadId)
 
   return (
     <AppShell currentPath={isPendingReview ? "/new-leads" : "/leads"} eyebrow="Lead detail" heading={lead.buyerName}>
@@ -52,9 +48,10 @@ export default async function LeadDetailPage({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.22em] text-[color:var(--muted-ink)]">
-                Recommendation
+                Stage
               </p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <StageBadge stage={lead.pipelineStage} />
                 <RecommendationBadge recommendation={lead.recommendation} />
               </div>
             </div>
@@ -81,9 +78,9 @@ export default async function LeadDetailPage({
           </div>
           {lead.review?.isReviewed ? (
             <div className="mt-4 rounded-[24px] bg-[color:var(--surface-strong)] p-4 text-sm leading-7 text-[color:var(--muted-ink)]">
-              Suggested: {lead.review.suggestedStage ? REVIEW_STAGE_LABELS[lead.review.suggestedStage as keyof typeof REVIEW_STAGE_LABELS] ?? lead.review.suggestedStage : "Pending"}
+              Suggested: {lead.review.suggestedStage ? getLeadStageLabel(lead.review.suggestedStage) : "Pending"}
               {" · "}
-              Confirmed as: {lead.review.reviewedStage ? REVIEW_STAGE_LABELS[lead.review.reviewedStage as keyof typeof REVIEW_STAGE_LABELS] ?? lead.review.reviewedStage : "Pending"}
+              Confirmed as: {lead.review.reviewedStage ? getLeadStageLabel(lead.review.reviewedStage) : "Pending"}
               {lead.review.reviewedAt ? ` · Reviewed ${formatDate(lead.review.reviewedAt)}` : ""}
             </div>
           ) : null}
@@ -98,11 +95,11 @@ export default async function LeadDetailPage({
                   </Button>
                 </form>
               ) : null}
-              {(["ready", "nurture", "hold"] as const).map((stage) => (
+              {REVIEW_STAGE_OPTIONS.map((stage) => (
                 <form key={stage} action={reviewLeadAction}>
                   <input type="hidden" name="leadId" value={lead.id} />
                   <Button type="submit" variant="secondary" className="w-full" name="pipelineStage" value={stage}>
-                    Move to {REVIEW_STAGE_LABELS[stage]}
+                    Move to {getLeadStageLabel(stage)}
                   </Button>
                 </form>
               ))}
@@ -112,7 +109,7 @@ export default async function LeadDetailPage({
               <input type="hidden" name="leadId" value={lead.id} />
               {moveTargets.map((stage) => (
                 <Button key={stage} type="submit" variant="secondary" name="pipelineStage" value={stage}>
-                  Move to {stage}
+                  Move to {getLeadStageLabel(stage)}
                 </Button>
               ))}
             </form>
@@ -163,6 +160,7 @@ export default async function LeadDetailPage({
                 : null}
             </div>
           </Card>
+          <LeadAppointmentsPanel lead={lead} appointments={appointments} />
           <Card className="p-6">
             <p className="font-display text-3xl text-[color:var(--ink)]">Intake answers</p>
             <div className="mt-5 grid gap-4">

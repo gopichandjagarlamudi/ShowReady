@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import { getLeadReviewState, getSuggestedStage } from "./lead-review"
 
 describe("lead-review", () => {
-  it("maps a show recommendation to the ready pipeline stage", () => {
-    expect(getSuggestedStage("show")).toBe("ready")
+  it("maps a show recommendation to the ready_to_show pipeline stage", () => {
+    expect(getSuggestedStage("show")).toBe("ready_to_show")
     expect(getSuggestedStage("nurture")).toBe("nurture")
     expect(getSuggestedStage("hold")).toBe("hold")
   })
@@ -15,7 +15,7 @@ describe("lead-review", () => {
         recommendation: "show"
       })
     ).toEqual({
-      suggestedStage: "ready",
+      suggestedStage: "ready_to_show",
       reviewedAt: undefined,
       reviewedStage: undefined,
       isReviewed: false,
@@ -32,7 +32,7 @@ describe("lead-review", () => {
         reviewedStage: "nurture"
       })
     ).toEqual({
-      suggestedStage: "ready",
+      suggestedStage: "ready_to_show",
       reviewedAt: "2026-04-09T14:00:00.000Z",
       reviewedStage: "nurture",
       isReviewed: true,
