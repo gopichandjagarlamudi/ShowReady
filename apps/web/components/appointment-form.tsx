@@ -51,7 +51,8 @@ export function AppointmentForm({
 }: AppointmentFormProps) {
   const formResetKey = [
     appointment?.id ?? "new",
-    appointment?.updatedAt ?? appointment?.date ?? "",
+    appointment?.date ?? "",
+    appointment?.startTime ?? "",
     lockedLead?.id ?? "",
     selectedLeadId ?? "",
     eligibleLeads.map((lead) => lead.id).join(",")

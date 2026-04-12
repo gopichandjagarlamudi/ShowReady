@@ -4,6 +4,8 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Fixed the follow-on CI/Vercel typecheck regression in `apps/web/components/appointment-form.tsx` by removing the invalid `appointment.updatedAt` reference from the keyed reset logic; the form reset key now uses `date` and `startTime`, which exist on the shared `Appointment` type.
+- Re-verified the fix with `corepack pnpm --filter @showready/web typecheck` and `corepack pnpm --filter @showready/web lint`, both of which now pass locally.
 - Fixed the failing GitHub Actions `CI / test (push)` lint regression by removing synchronous `setState` calls from `useEffect` in `apps/web/components/appointment-form.tsx` and `apps/web/components/leads-manager.tsx`; both components now reset their local state through keyed inner components instead of effect-driven state synchronization.
 - Re-verified the CI-sensitive paths with `corepack pnpm --filter @showready/web lint` and `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx components/appointments-manager.test.tsx`, which now pass locally.
 - Replaced the sparse top-level project docs with a repo-wide documentation baseline: `README.md` now reflects the current invite-first, review-before-pipeline, appointments-enabled Supabase runtime; `docs/DEVELOPMENT.md` documents setup, runtime boundaries, and verification workflow; and `docs/PRODUCT.md` captures the agent/public product flows and key domain objects.
