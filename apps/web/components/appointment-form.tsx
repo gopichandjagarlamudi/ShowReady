@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useState } from "react"
+import { useId, useState } from "react"
 import type { Appointment } from "@showready/types"
 import { saveAppointmentAction } from "@/lib/actions"
 import { Button } from "@/components/ui/button"
@@ -49,6 +49,35 @@ export function AppointmentForm({
   heading,
   description
 }: AppointmentFormProps) {
+  const formResetKey = [
+    appointment?.id ?? "new",
+    appointment?.updatedAt ?? appointment?.date ?? "",
+    lockedLead?.id ?? "",
+    selectedLeadId ?? "",
+    eligibleLeads.map((lead) => lead.id).join(",")
+  ].join(":")
+
+  return (
+    <AppointmentFormInner
+      key={formResetKey}
+      appointment={appointment}
+      eligibleLeads={eligibleLeads}
+      selectedLeadId={selectedLeadId}
+      lockedLead={lockedLead}
+      heading={heading}
+      description={description}
+    />
+  )
+}
+
+function AppointmentFormInner({
+  appointment,
+  eligibleLeads,
+  selectedLeadId,
+  lockedLead,
+  heading,
+  description
+}: AppointmentFormProps) {
   const formId = useId()
   const leadFieldId = `${formId}-lead`
   const dateFieldId = `${formId}-date`
@@ -61,14 +90,6 @@ export function AppointmentForm({
   const [startTime, setStartTime] = useState(appointment?.startTime ?? "")
   const [notes, setNotes] = useState(appointment?.notes ?? "")
   const [showings, setShowings] = useState<ShowingDraft[]>(buildShowingDrafts(appointment))
-
-  useEffect(() => {
-    setLeadId(lockedLead?.id ?? selectedLeadId ?? eligibleLeads[0]?.id ?? appointment?.lead.id ?? "")
-    setDate(appointment?.date ?? "")
-    setStartTime(appointment?.startTime ?? "")
-    setNotes(appointment?.notes ?? "")
-    setShowings(buildShowingDrafts(appointment))
-  }, [appointment, eligibleLeads, lockedLead, selectedLeadId])
 
   const noEligibleLeads = !lockedLead && !appointment && eligibleLeads.length === 0
 

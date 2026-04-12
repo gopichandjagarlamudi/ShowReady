@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import type { Lead, LeadStage } from "@showready/types"
 import { deleteLeadsAction, updateLeadStageAction } from "@/lib/actions"
@@ -103,6 +103,38 @@ export function LeadsManager({
   activeTab = "ready_to_show",
   outcomeTab = "closed_won"
 }: LeadsManagerProps) {
+  const sections = Object.fromEntries(
+    (Object.keys(STAGE_META) as LeadStage[]).map((stage) => [
+      stage,
+      {
+        stage,
+        ...STAGE_META[stage],
+        leads: leads.filter((lead) => lead.pipelineStage === stage)
+      }
+    ])
+  ) as Record<LeadStage, StageMeta & { stage: LeadStage; leads: Lead[] }>
+  const boardResetKey = [
+    activeTab,
+    outcomeTab,
+    ...sections[activeTab].leads.map((lead) => lead.id),
+    ...sections[outcomeTab].leads.map((lead) => lead.id)
+  ].join(":")
+
+  return (
+    <LeadsManagerBoard
+      key={boardResetKey}
+      leads={leads}
+      activeTab={activeTab}
+      outcomeTab={outcomeTab}
+    />
+  )
+}
+
+function LeadsManagerBoard({
+  leads,
+  activeTab = "ready_to_show",
+  outcomeTab = "closed_won"
+}: LeadsManagerProps) {
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([])
   const sections = useMemo(
     () =>
@@ -133,13 +165,6 @@ export function LeadsManager({
     visibleLeadIds.length > 0 && selectedLeadIdsOnBoard.length === visibleLeadIds.length
   const selectedCount = selectedLeadIdsOnBoard.length
   const selectedIdSet = useMemo(() => new Set(selectedLeadIdsOnBoard), [selectedLeadIdsOnBoard])
-
-  useEffect(() => {
-    setSelectedLeadIds((current) => {
-      const next = reconcileSelectedLeadIds(current, visibleLeadIds)
-      return next.length === current.length ? current : next
-    })
-  }, [visibleLeadIds])
 
   function toggleLead(leadId: string, checked: boolean) {
     setSelectedLeadIds((current) =>

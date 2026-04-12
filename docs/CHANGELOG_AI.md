@@ -1,6 +1,8 @@
 # AI Changelog
 
 ## 2026-04-11
+- Fixed the failing web lint check in CI by removing `react-hooks/set-state-in-effect` violations from `apps/web/components/appointment-form.tsx` and `apps/web/components/leads-manager.tsx`; both components now use keyed inner stateful wrappers instead of synchronizing local state from `useEffect`.
+- Re-verified the fix locally with `corepack pnpm --filter @showready/web lint` and `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx components/appointments-manager.test.tsx`.
 - Rewrote `README.md` so the top-level docs now match the actual runtime: invite-first intake, `/new-leads` review, `/appointments`, Supabase-only architecture, route inventory, setup, migration steps, command reference, and runtime boundaries.
 - Added `docs/DEVELOPMENT.md` as the repo operations guide covering monorepo structure, environment expectations, migration and seed flow, verification commands, feature-area entry points, and sensitive boundaries.
 - Added `docs/PRODUCT.md` to document the end-to-end agent and public workflows, core domain objects, scoring behavior, sale vs rental intake split, and the operational assumptions behind review-before-pipeline lead handling.
