@@ -1,5 +1,9 @@
 # AI Changelog
 
+## 2026-04-12
+- Removed the duplicate recommendation badge from `apps/web/components/lead-card.tsx`, so the dashboard `Recent leads` cards now show only the current pipeline stage badge instead of stacking a second pill that could repeat the same label.
+- Added `apps/web/components/lead-card.test.tsx` and re-verified with `corepack pnpm --filter @showready/web test -- components/lead-card.test.tsx`.
+
 ## 2026-04-11
 - Re-verified deployed auth behavior and confirmed the current split remains unchanged: `https://showready-jet.vercel.app/login` still signs into the seeded demo account successfully on desktop, while the Vercel-auth-protected preview deployment still fails with `HTTP 500` on browser `POST /auth/login` even when opened from a fresh share-bypass URL.
 - Fixed the follow-on CI/Vercel typecheck regression in `apps/web/components/appointment-form.tsx` by replacing the nonexistent `appointment.updatedAt` key segment with existing appointment fields (`date` and `startTime`), then re-verified with local `typecheck` and `lint`.

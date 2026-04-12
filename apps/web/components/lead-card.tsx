@@ -1,6 +1,6 @@
 import Link from "next/link"
 import type { Lead } from "@showready/types"
-import { RecommendationBadge, StageBadge } from "@/components/ui/badge"
+import { StageBadge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { getLeadStageLabel } from "@/lib/lead-stage"
 import { formatDate, formatScore } from "@/lib/utils"
@@ -17,7 +17,6 @@ export function LeadCard({ lead }: { lead: Lead }) {
         </div>
         <div className="flex flex-col items-end gap-2">
           <StageBadge stage={lead.pipelineStage} />
-          {lead.recommendation ? <RecommendationBadge recommendation={lead.recommendation} /> : null}
         </div>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">

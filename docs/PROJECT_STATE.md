@@ -4,6 +4,8 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Removed the duplicate recommendation pill from the shared dashboard/recent-leads card so `apps/web/components/lead-card.tsx` now shows only the current stage badge; this avoids stacked duplicate labels like `Ready to show` above `Ready to show` when the recommendation matches the live pipeline stage.
+- Added `apps/web/components/lead-card.test.tsx` to lock the simplified card treatment and re-verified the change with `corepack pnpm --filter @showready/web test -- components/lead-card.test.tsx`.
 - Re-verified the deployed auth split on April 11, 2026: desktop email/password login on the public production alias `https://showready-jet.vercel.app/login` still succeeds with the seeded demo account and reaches `/dashboard`, while the protected preview deployment `https://showready-1u87krowa-jagarlamudigopichand99-4818s-projects.vercel.app/login` still fails on browser `POST /auth/login` with `HTTP 500` even when opened through a fresh Vercel share-bypass URL.
 - Fixed the follow-on CI/Vercel typecheck regression in `apps/web/components/appointment-form.tsx` by removing the invalid `appointment.updatedAt` reference from the keyed reset logic; the form reset key now uses `date` and `startTime`, which exist on the shared `Appointment` type.
 - Re-verified the fix with `corepack pnpm --filter @showready/web typecheck` and `corepack pnpm --filter @showready/web lint`, both of which now pass locally.
