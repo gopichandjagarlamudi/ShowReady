@@ -4,6 +4,7 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Replaced the sparse top-level project docs with a repo-wide documentation baseline: `README.md` now reflects the current invite-first, review-before-pipeline, appointments-enabled Supabase runtime; `docs/DEVELOPMENT.md` documents setup, runtime boundaries, and verification workflow; and `docs/PRODUCT.md` captures the agent/public product flows and key domain objects.
 - Replaced the `/leads` side-by-side pipeline board with tab-driven full-width sections: `apps/web/app/leads/page.tsx` now reads `active` / `outcome` search params, `apps/web/components/leads-manager.tsx` renders separate active and outcome tab rails with `Ready to show` as the default active workspace, and `new` leads are now surfaced as a lightweight `/new-leads` review cue instead of a visible pipeline column.
 - Kept the persistent lead-card footer action bar inside the new full-width sections, limited desktop density to two cards per row, preserved single-column mobile cards, and kept the mobile tab rails horizontally swipeable without reverting to page-level multi-column board behavior.
 - Expanded `apps/web/components/leads-manager.test.tsx` to cover the tabbed-section defaults, separate outcome rail, hidden off-tab sections, `/new-leads` cue, and the existing stale-selection reconciliation behavior, then re-verified with `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx`, `corepack pnpm --filter @showready/web test -- lib/lead-stage.test.ts`, and `corepack pnpm --filter @showready/web typecheck`.
@@ -141,6 +142,7 @@ Stabilize and extend the ShowReady MVP on a real Supabase runtime while preservi
 - `apps/web/scripts/seed-supabase.ts`
 
 ## Open Issues / Loose Ends
+- The new docs are code-aligned and repo-observable, but they still do not include screenshots, sequence diagrams, or deployment-provider runbooks; future documentation work could add operator-facing visuals once the surface area stabilizes further.
 - Any Supabase environment that should use the refreshed pipeline and appointments workflow must apply `packages/db/migrations/0005_lead_stage_refresh_and_appointments.sql`; the migration now self-heals missing review columns, but the new `/appointments` route and `appointment_booked` stage contract still require that upgrade to exist in the connected project.
 - The appointments and split-board changes now have manual browser verification, but there is still no dedicated Playwright coverage for creating/editing appointments, status changes, or verifying the auto-move into `appointment_booked`.
 - The `/leads` board readability fix currently has targeted component coverage and a manual browser check on the authenticated local page; there is still no visual regression coverage for narrow desktop board columns beyond the static markup assertion in `apps/web/components/leads-manager.test.tsx`.

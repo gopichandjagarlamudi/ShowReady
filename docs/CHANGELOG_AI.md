@@ -1,6 +1,9 @@
 # AI Changelog
 
 ## 2026-04-11
+- Rewrote `README.md` so the top-level docs now match the actual runtime: invite-first intake, `/new-leads` review, `/appointments`, Supabase-only architecture, route inventory, setup, migration steps, command reference, and runtime boundaries.
+- Added `docs/DEVELOPMENT.md` as the repo operations guide covering monorepo structure, environment expectations, migration and seed flow, verification commands, feature-area entry points, and sensitive boundaries.
+- Added `docs/PRODUCT.md` to document the end-to-end agent and public workflows, core domain objects, scoring behavior, sale vs rental intake split, and the operational assumptions behind review-before-pipeline lead handling.
 - Replaced the `/leads` side-by-side active pipeline columns with a tab-driven full-width workspace: `apps/web/app/leads/page.tsx` now reads URL-backed `active` / `outcome` params, `apps/web/components/leads-manager.tsx` renders separate active and outcome tab rails, `Ready to show` is the default active tab, and `New` moved to a lightweight `/new-leads` review cue instead of appearing as a live pipeline section.
 - Kept the persistent footer action bar inside the widened full-width sections, limited visible card density to a maximum 2-column desktop grid with single-column mobile cards, and kept the tab rails horizontally swipeable on smaller screens.
 - Expanded `apps/web/components/leads-manager.test.tsx` to cover tab defaults, separate outcome tabs, off-tab section hiding, and the `/new-leads` review cue, then re-verified with `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx` and `corepack pnpm --filter @showready/web typecheck`.
