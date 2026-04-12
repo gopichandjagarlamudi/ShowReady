@@ -1,6 +1,7 @@
 # AI Changelog
 
 ## 2026-04-12
+- Replaced the dashboard page heading in `apps/web/app/dashboard/page.tsx` from `Good morning, …` to `Welcome back, …` and added `apps/web/app/dashboard/page.test.tsx` to cover the page-level copy.
 - Removed the duplicate recommendation badge from `apps/web/components/lead-card.tsx`, so the dashboard `Recent leads` cards now show only the current pipeline stage badge instead of stacking a second pill that could repeat the same label.
 - Added `apps/web/components/lead-card.test.tsx` and re-verified with `corepack pnpm --filter @showready/web test -- components/lead-card.test.tsx`.
 

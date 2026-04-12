@@ -43,7 +43,7 @@ export default async function DashboardPage({
     <AppShell
       currentPath="/dashboard"
       eyebrow={context.settings.brandName}
-      heading={`Good morning, ${context.agent.fullName.split(" ")[0]}`}
+      heading={`Welcome back, ${context.agent.fullName.split(" ")[0]}`}
     >
       <LiveRefresh agentId={context.agent.id} />
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
