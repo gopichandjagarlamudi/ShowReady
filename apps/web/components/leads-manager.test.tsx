@@ -59,12 +59,16 @@ function buildLead(overrides: Partial<Lead>): Lead {
   }
 }
 
-function renderLeadsManager(leads: Lead[], options?: { activeTab?: any; outcomeTab?: any }) {
+function renderLeadsManager(
+  leads: Lead[],
+  options?: { activeTab?: any; outcomeTab?: any; activeAppointmentLeadIds?: string[] }
+) {
   return renderToStaticMarkup(
     <LeadsManager
       leads={leads}
       activeTab={options?.activeTab ?? "ready_to_show"}
       outcomeTab={options?.outcomeTab ?? "closed_won"}
+      activeAppointmentLeadIds={options?.activeAppointmentLeadIds ?? []}
     />
   )
 }
@@ -266,6 +270,28 @@ describe("LeadsManager", () => {
     expect(html).toContain("Hold Buyer")
     expect(html).toContain("Archived Buyer")
     expect(html).not.toContain("Ready Buyer")
+  })
+
+  it("shows active scheduled appointments in the appointment_booked tab without changing the real stage badge", () => {
+    const html = renderLeadsManager(
+      [
+        buildLead({
+          id: "lead-ready",
+          buyerName: "Ready Buyer",
+          pipelineStage: "ready_to_show",
+          recommendation: "show"
+        })
+      ],
+      {
+        activeTab: "appointment_booked",
+        activeAppointmentLeadIds: ["lead-ready"]
+      }
+    )
+
+    expect(html).toContain("Ready Buyer")
+    expect(html).toContain("Appointment booked")
+    expect(html).toContain("Ready to show")
+    expect(html).not.toContain("No appointment-booked leads yet.")
   })
 
   it("drops stale selected ids when the board data changes", () => {

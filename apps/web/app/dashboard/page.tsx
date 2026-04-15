@@ -12,6 +12,8 @@ import { buildAppUrl } from "@/lib/utils";
 import { getAnalyticsSummary, listInvites, listLeads } from "@/lib/supabase/data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic"
+
 export default async function DashboardPage({
   searchParams
 }: {

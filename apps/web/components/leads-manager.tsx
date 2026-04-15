@@ -15,6 +15,7 @@ type OutcomeLeadTab = "closed_won" | "closed_lost" | "archived"
 
 type LeadsManagerProps = {
   leads: Lead[]
+  activeAppointmentLeadIds?: string[]
   activeTab?: ActiveLeadTab
   outcomeTab?: OutcomeLeadTab
 }
@@ -100,16 +101,31 @@ function buildLeadsTabHref(activeTab: ActiveLeadTab, outcomeTab: OutcomeLeadTab)
 
 export function LeadsManager({
   leads,
+  activeAppointmentLeadIds = [],
   activeTab = "ready_to_show",
   outcomeTab = "closed_won"
 }: LeadsManagerProps) {
+  const activeAppointmentLeadIdSet = new Set(activeAppointmentLeadIds)
   const sections = Object.fromEntries(
     (Object.keys(STAGE_META) as LeadStage[]).map((stage) => [
       stage,
       {
         stage,
         ...STAGE_META[stage],
-        leads: leads.filter((lead) => lead.pipelineStage === stage)
+        leads:
+          stage === "appointment_booked"
+            ? Array.from(
+                new Map(
+                  leads
+                    .filter(
+                      (lead) =>
+                        lead.pipelineStage === "appointment_booked" ||
+                        activeAppointmentLeadIdSet.has(lead.id)
+                    )
+                    .map((lead) => [lead.id, lead])
+                ).values()
+              )
+            : leads.filter((lead) => lead.pipelineStage === stage)
       }
     ])
   ) as Record<LeadStage, StageMeta & { stage: LeadStage; leads: Lead[] }>
@@ -124,6 +140,7 @@ export function LeadsManager({
     <LeadsManagerBoard
       key={boardResetKey}
       leads={leads}
+      activeAppointmentLeadIds={activeAppointmentLeadIds}
       activeTab={activeTab}
       outcomeTab={outcomeTab}
     />
@@ -132,10 +149,15 @@ export function LeadsManager({
 
 function LeadsManagerBoard({
   leads,
+  activeAppointmentLeadIds = [],
   activeTab = "ready_to_show",
   outcomeTab = "closed_won"
 }: LeadsManagerProps) {
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([])
+  const activeAppointmentLeadIdSet = useMemo(
+    () => new Set(activeAppointmentLeadIds),
+    [activeAppointmentLeadIds]
+  )
   const sections = useMemo(
     () =>
       Object.fromEntries(
@@ -144,11 +166,24 @@ function LeadsManagerBoard({
           {
             stage,
             ...STAGE_META[stage],
-            leads: leads.filter((lead) => lead.pipelineStage === stage)
+            leads:
+              stage === "appointment_booked"
+                ? Array.from(
+                    new Map(
+                      leads
+                        .filter(
+                          (lead) =>
+                            lead.pipelineStage === "appointment_booked" ||
+                            activeAppointmentLeadIdSet.has(lead.id)
+                        )
+                        .map((lead) => [lead.id, lead])
+                    ).values()
+                  )
+                : leads.filter((lead) => lead.pipelineStage === stage)
           }
         ])
       ) as Record<LeadStage, StageMeta & { stage: LeadStage; leads: Lead[] }>,
-    [leads]
+    [activeAppointmentLeadIdSet, leads]
   )
 
   const activeSection = sections[activeTab]

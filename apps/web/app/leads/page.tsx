@@ -3,8 +3,10 @@ import type { LeadStage } from "@showready/types"
 import { AppShell } from "@/components/app-shell"
 import { LeadsManager } from "@/components/leads-manager"
 import { getCurrentAgentContext } from "@/lib/session"
-import { listLeads } from "@/lib/supabase/data"
+import { listLeadIdsWithScheduledAppointments, listLeads } from "@/lib/supabase/data"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+
+export const dynamic = "force-dynamic"
 
 const ACTIVE_TABS = ["ready_to_show", "appointment_booked", "nurture", "hold"] as const
 const OUTCOME_TABS = ["closed_won", "closed_lost", "archived"] as const
@@ -37,10 +39,20 @@ export default async function LeadsPage({
 
   const supabase = await createSupabaseServerClient()
   const leads = await listLeads(supabase, context.agent.id)
+  const activeAppointmentLeadIds = await listLeadIdsWithScheduledAppointments(
+    supabase,
+    context.agent.id,
+    leads.map((lead) => lead.id)
+  )
 
   return (
     <AppShell currentPath="/leads" eyebrow={context.settings.brandName} heading="Pipeline">
-      <LeadsManager leads={leads} activeTab={activeTab} outcomeTab={outcomeTab} />
+      <LeadsManager
+        leads={leads}
+        activeAppointmentLeadIds={activeAppointmentLeadIds}
+        activeTab={activeTab}
+        outcomeTab={outcomeTab}
+      />
     </AppShell>
   )
 }

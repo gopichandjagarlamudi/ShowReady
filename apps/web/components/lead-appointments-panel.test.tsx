@@ -97,4 +97,32 @@ describe("LeadAppointmentsPanel", () => {
     expect(html).toContain("History")
     expect(html).toContain("Completed")
   })
+
+  it("moves closed appointments out of the active block and keeps them in history", () => {
+    const html = renderToStaticMarkup(
+      <LeadAppointmentsPanel
+        lead={buildLead({ pipelineStage: "ready_to_show" })}
+        appointments={[
+          buildAppointment({
+            id: "appointment-2",
+            status: "completed",
+            date: "2026-04-18",
+            startTime: "10:00:00"
+          }),
+          buildAppointment({
+            id: "appointment-3",
+            status: "cancelled",
+            date: "2026-04-19",
+            startTime: "11:00:00"
+          })
+        ]}
+      />
+    )
+
+    expect(html).not.toContain("Current scheduled appointment")
+    expect(html).toContain("History")
+    expect(html).toContain("Completed")
+    expect(html).toContain("Cancelled")
+    expect(html).toContain("Create appointment")
+  })
 })

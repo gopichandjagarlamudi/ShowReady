@@ -522,6 +522,41 @@ export async function listEligibleLeadsForAppointments(
   return leads.filter((lead) => canCreateAppointmentForLead(lead.pipelineStage))
 }
 
+export async function listLeadIdsWithScheduledAppointments(
+  client: AppSupabaseClient,
+  agentId: string,
+  leadIds?: string[]
+) {
+  let scopedLeadIds = leadIds ?? []
+
+  if (scopedLeadIds.length === 0) {
+    const { data, error } = await client.from("leads").select("id").eq("agent_id", agentId)
+
+    if (error) {
+      throw error
+    }
+
+    scopedLeadIds = (data ?? []).map((lead) => lead.id)
+  }
+
+  if (scopedLeadIds.length === 0) {
+    return []
+  }
+
+  const { data, error } = await client
+    .from("appointments")
+    .select("*")
+    .eq("status", "scheduled")
+    .in("lead_id", scopedLeadIds)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    throw error
+  }
+
+  return Array.from(new Set((data ?? []).map((appointment) => appointment.lead_id)))
+}
+
 export async function listAppointments(
   client: AppSupabaseClient,
   agentId: string,
@@ -834,21 +869,6 @@ export async function createAppointment(
     throw showingError
   }
 
-  const { data: updatedLead, error: leadUpdateError } = await client
-    .from("leads")
-    .update({
-      pipeline_stage: "appointment_booked",
-      updated_at: nowIso()
-    })
-    .eq("agent_id", agentId)
-    .eq("id", input.leadId)
-    .select("*")
-    .single()
-
-  if (leadUpdateError) {
-    throw leadUpdateError
-  }
-
   const { data: showingRows, error: insertedShowingsError } = await client
     .from("showings")
     .select("*")
@@ -859,7 +879,7 @@ export async function createAppointment(
     throw insertedShowingsError
   }
 
-  return mapAppointment(appointment, updatedLead, showingRows ?? [])
+  return mapAppointment(appointment, leadRow, showingRows ?? [])
 }
 
 export async function updateAppointment(
@@ -1345,7 +1365,7 @@ export async function getAnalyticsSummary(
 ) {
   const { data, error } = await client
     .from("leads")
-    .select("pipeline_stage, score")
+    .select("id, pipeline_stage, score")
     .eq("agent_id", agentId)
 
   if (error) {
@@ -1353,8 +1373,16 @@ export async function getAnalyticsSummary(
   }
 
   const leads = data ?? []
+  const leadIds = leads.map((lead) => lead.id).filter(Boolean)
+  const activeAppointmentLeadIds = await listLeadIdsWithScheduledAppointments(client, agentId, leadIds)
+  const appointmentBookedLeadIds = new Set(
+    leads
+      .filter((lead) => lead.pipeline_stage === "appointment_booked")
+      .map((lead) => lead.id)
+      .concat(activeAppointmentLeadIds)
+  )
   const readyToShow = leads.filter((lead) => lead.pipeline_stage === "ready_to_show").length
-  const appointmentBooked = leads.filter((lead) => lead.pipeline_stage === "appointment_booked").length
+  const appointmentBooked = appointmentBookedLeadIds.size
   const nurture = leads.filter((lead) => lead.pipeline_stage === "nurture").length
   const hold = leads.filter((lead) => lead.pipeline_stage === "hold").length
   const scored = leads.filter((lead) => typeof lead.score === "number")

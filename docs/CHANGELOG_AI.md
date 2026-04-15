@@ -1,6 +1,10 @@
 # AI Changelog
 
 ## 2026-04-15
+- Changed the legacy `Appointment booked` surfaces into a hybrid overlay: `/leads` now shows legacy `appointment_booked` leads plus any lead with a scheduled appointment while keeping each card's real stored stage badge/category, and dashboard analytics now count that same deduped union.
+- Added overlay-focused regressions in `apps/web/components/leads-manager.test.tsx` and `apps/web/lib/supabase/data.appointments.test.ts`, then re-verified with targeted Vitest coverage, `corepack pnpm --filter @showready/web typecheck`, and a local browser flow that created a scheduled appointment and confirmed it surfaced under dashboard/`/leads` `Appointment booked` without changing the lead's `Ready to show` stage.
+- Changed appointment creation in `apps/web/lib/supabase/data.ts` so scheduled appointments no longer move leads into `appointment_booked`; appointment status changes also remain stage-neutral, which keeps reviewed leads in their existing category until someone manually moves them.
+- Added `apps/web/lib/supabase/data.appointments.test.ts` plus an expanded `apps/web/components/lead-appointments-panel.test.tsx` to lock the new overlay behavior, and re-verified with targeted appointment/leads Vitest coverage plus `corepack pnpm --filter @showready/web typecheck`.
 - Fixed the `/leads` actions-menu clipping bug in `apps/web/components/leads-manager.tsx` by removing `overflow-hidden` from the stage section wrapper, moving the rounded top corners onto the section header itself, and raising the per-card `details` stack level so lower-card menus can overlay the next board section instead of being masked by it.
 - Added a focused regression in `apps/web/components/leads-manager.test.tsx` and re-verified the fix with `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx`, `corepack pnpm --filter @showready/web typecheck`, and a local authenticated browser pass on `/leads`.
 
