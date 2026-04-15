@@ -244,7 +244,7 @@ function LeadsManagerBoard({
                 </select>
               </label>
             </form>
-            <details className="relative shrink-0">
+            <details className="relative z-20 shrink-0">
               <summary
                 aria-label={`More lead actions for ${lead.buyerName}`}
                 className="flex min-h-11 cursor-pointer list-none items-center rounded-full px-4 text-sm font-medium text-[color:var(--muted-ink)] transition hover:bg-[color:var(--muted)] hover:text-[color:var(--ink)]"
@@ -290,8 +290,13 @@ function LeadsManagerBoard({
 
   function renderSection(section: StageMeta & { stage: LeadStage; leads: Lead[] }) {
     return (
-      <Card key={section.stage} className="overflow-hidden">
-        <div className={cn("border-b p-5", section.headerClassName)}>
+      <Card key={section.stage}>
+        <div
+          className={cn(
+            "rounded-t-[calc(var(--radius-lg)-1px)] border-b p-5",
+            section.headerClassName
+          )}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-display text-2xl text-[color:var(--ink)]">{section.title}</p>

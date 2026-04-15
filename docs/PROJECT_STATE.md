@@ -4,6 +4,8 @@
 Stabilize and extend the ShowReady MVP on a real Supabase runtime while preserving cross-thread continuity through repo-based memory files instead of chat history.
 
 ## Recently Completed
+- Fixed the `/leads` card overflow-menu clipping regression: `apps/web/components/leads-manager.tsx` no longer renders stage sections with `overflow-hidden`, the section header now carries the rounded top corners directly, and the per-card `Actions` menu got a stronger local stacking context so the dropdown can extend past the card/section boundary without being masked by the outcomes board below.
+- Added a focused regression in `apps/web/components/leads-manager.test.tsx` to lock the non-clipping section container behavior, then re-verified with `corepack pnpm --filter @showready/web test -- components/leads-manager.test.tsx`, `corepack pnpm --filter @showready/web typecheck`, and a local authenticated browser pass on `/leads` confirming the lower-card `Actions` menu stays visible above the following section.
 - Replaced the dashboard header greeting in `apps/web/app/dashboard/page.tsx` from `Good morning, ...` to the neutral `Welcome back, ...`, and added `apps/web/app/dashboard/page.test.tsx` to lock the page-level heading copy.
 - Removed the duplicate recommendation pill from the shared dashboard/recent-leads card so `apps/web/components/lead-card.tsx` now shows only the current stage badge; this avoids stacked duplicate labels like `Ready to show` above `Ready to show` when the recommendation matches the live pipeline stage.
 - Added `apps/web/components/lead-card.test.tsx` to lock the simplified card treatment and re-verified the change with `corepack pnpm --filter @showready/web test -- components/lead-card.test.tsx`.

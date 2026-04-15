@@ -218,6 +218,20 @@ describe("LeadsManager", () => {
     expect(html).not.toContain("Open lead detail")
   })
 
+  it("does not clip floating lead action menus inside a stage section", () => {
+    const html = renderLeadsManager([
+      buildLead({
+        id: "lead-ready",
+        buyerName: "Ready Buyer",
+        pipelineStage: "ready_to_show",
+        recommendation: "show"
+      })
+    ])
+
+    expect(html).toContain("More lead actions for Ready Buyer")
+    expect(html).not.toContain("shadow-[var(--shadow-card)] overflow-hidden")
+  })
+
   it("renders horizontal active and outcome tab rails with one visible section each", () => {
     const html = renderLeadsManager(
       [
